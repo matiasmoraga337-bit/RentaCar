@@ -1,0 +1,16 @@
+{
+  "name": "rentacar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Marketplace multi-proveedor de arriendo de vehiculos",
+  "scripts": {
+    "dev:frontend": "npm --prefix Frontend run dev",
+    "dev:backend": "npm --prefix Backend run dev",
+    "build:frontend": "npm --prefix Frontend run build",
+    "build:backend": "npm --prefix Backend run build"
+  },
+  "engines": {
+    "node": ">=22 <25",
+    "npm": ">=10"
+  }
+}

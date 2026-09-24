@@ -54,13 +54,13 @@ Objetivo: definir el alcance y preparar el repositorio.
 
 Tareas:
 
-- [ ] Crear repositorio GitHub.
-- [ ] Agregar integrantes.
+- [x] Crear repositorio GitHub.
+- [x] Agregar integrantes.
 - [ ] Crear ramas `main` y `develop`.
-- [ ] Crear `.gitignore`.
+- [x] Crear `.gitignore`.
 - [ ] Crear README.
-- [ ] Confirmar tecnologías.
-- [ ] Confirmar modelo relacional.
+- [x] Confirmar tecnologías.
+- [x] Confirmar modelo relacional.
 
 Resultado esperado: repositorio inicial organizado.
 
@@ -70,13 +70,13 @@ Objetivo: lograr que todos trabajen con las mismas herramientas.
 
 Tareas:
 
-- [ ] Instalar Node.js LTS.
-- [ ] Configurar npm.
+- [x] Instalar Node.js LTS.
+- [x] Configurar npm.
 - [ ] Configurar `nvm-windows`.
-- [ ] Instalar Docker Desktop.
-- [ ] Levantar SQL Server.
-- [ ] Probar conexión a SQL Server.
-- [ ] Crear `.env.example`.
+- [x] Instalar Docker Desktop.
+- [x] Levantar SQL Server.
+- [x] Probar conexión a SQL Server.
+- [x] Crear `.env.example`.
 
 Resultado esperado: entorno local funcional para los tres integrantes.
 
@@ -86,19 +86,19 @@ Objetivo: implementar `RentaCarDB.sql`.
 
 Tareas:
 
-- [ ] Crear la base de datos.
-- [ ] Crear tablas geográficas.
-- [ ] Crear usuarios y roles.
-- [ ] Crear proveedores.
-- [ ] Crear sedes.
-- [ ] Crear catálogos de vehículos.
-- [ ] Crear vehículos.
-- [ ] Crear disponibilidad por sede y comuna.
-- [ ] Crear reservas y arriendos.
-- [ ] Crear pagos y reseñas.
-- [ ] Crear auditoría.
-- [ ] Crear restricciones e índices.
-- [ ] Insertar catálogos iniciales.
+- [x] Crear la base de datos.
+- [x] Crear tablas geográficas.
+- [x] Crear usuarios y roles.
+- [x] Crear proveedores.
+- [x] Crear sedes.
+- [x] Crear catálogos de vehículos.
+- [x] Crear vehículos.
+- [x] Crear disponibilidad por sede y comuna.
+- [x] Crear reservas y arriendos.
+- [x] Crear pagos y reseñas.
+- [x] Crear auditoría.
+- [x] Crear restricciones e índices.
+- [x] Insertar catálogos iniciales.
 
 Resultado esperado: base de datos creada desde cero y probada en SQL Server.
 
@@ -108,13 +108,13 @@ Objetivo: completar los elementos exigidos por la asignatura.
 
 Tareas:
 
-- [ ] Crear vistas.
-- [ ] Crear procedimientos almacenados.
-- [ ] Crear trigger de auditoría.
-- [ ] Crear cursor para reportes.
-- [ ] Implementar transacciones.
-- [ ] Validar reservas superpuestas.
-- [ ] Validar sedes y proveedores.
+- [x] Crear vistas.
+- [x] Crear procedimientos almacenados.
+- [x] Crear trigger de auditoría.
+- [x] Crear cursor para reportes.
+- [x] Implementar transacciones.
+- [x] Validar reservas superpuestas.
+- [x] Validar sedes y proveedores.
 - [ ] Probar estados de reserva, pago y arriendo.
 
 Resultado esperado: lógica principal implementada en SQL Server.
@@ -125,13 +125,13 @@ Objetivo: crear la API REST.
 
 Tareas:
 
-- [ ] Inicializar Node.js y TypeScript.
-- [ ] Configurar Express.
-- [ ] Configurar `mssql`.
-- [ ] Crear pool de conexión.
-- [ ] Crear manejo de errores.
+- [x] Inicializar Node.js y TypeScript.
+- [x] Configurar Express.
+- [x] Configurar `mssql`.
+- [x] Crear pool de conexión.
+- [x] Crear manejo de errores.
 - [ ] Crear validadores.
-- [ ] Crear middleware JWT.
+- [x] Crear middleware JWT.
 - [ ] Crear middleware de roles.
 
 Resultado esperado: backend conectado a SQL Server.
@@ -142,12 +142,12 @@ Objetivo: implementar el acceso seguro.
 
 Tareas:
 
-- [ ] Registro de persona y usuario.
-- [ ] Hash de contraseña con bcrypt.
-- [ ] Inicio de sesión.
-- [ ] Generación de JWT.
-- [ ] Consulta de perfil.
-- [ ] Protección de rutas.
+- [x] Registro de persona y usuario.
+- [x] Hash de contraseña con bcrypt.
+- [x] Inicio de sesión.
+- [x] Generación de JWT.
+- [x] Consulta de perfil.
+- [x] Protección de rutas.
 - [ ] Control de roles.
 
 Resultado esperado: usuarios pueden registrarse e iniciar sesión de forma segura.
@@ -176,10 +176,10 @@ Objetivo: permitir que los clientes encuentren vehículos.
 
 Tareas:
 
-- [ ] Crear catálogo público.
+- [x] Crear catálogo público.
 - [ ] Filtrar por región y comuna.
 - [ ] Filtrar por tipo, marca y modelo.
-- [ ] Filtrar por precio.
+- [x] Filtrar por precio.
 - [ ] Filtrar por fechas.
 - [ ] Mostrar detalle del vehículo.
 - [ ] Mostrar sedes disponibles.
