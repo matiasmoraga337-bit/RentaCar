@@ -1,0 +1,75 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package release artifacts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            Frontend/package-lock.json
+            Backend/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: Frontend
+        run: npm ci
+
+      - name: Install backend dependencies
+        working-directory: Backend
+        run: npm ci
+
+      - name: Build frontend and backend
+        run: |
+          npm run build:frontend
+          npm run build:backend
+
+      - name: Prepare frontend artifact
+        run: |
+          mkdir -p release/frontend
+          cp -R Frontend/dist/. release/frontend/
+
+      - name: Prepare backend artifact
+        run: |
+          mkdir -p release/backend
+          cp -R Backend/dist release/backend/
+          cp Backend/package.json release/backend/
+          cp Backend/package-lock.json release/backend/
+
+      - name: Upload frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rentacar-frontend
+          path: release/frontend
+          if-no-files-found: error
+
+      - name: Upload backend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rentacar-backend
+          path: release/backend
+          if-no-files-found: error

@@ -20,6 +20,10 @@ GO
 USE RentaCarDB;
 GO
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 /* ================================================================
    1. GEOGRAFIA
    ================================================================ */
@@ -687,6 +691,10 @@ GO
    8. INDICES
    ================================================================ */
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 CREATE INDEX IX_comuna_region
 ON Comuna(ID_region_comuna);
 
@@ -761,6 +769,32 @@ VALUES ('TARJETA'), ('TRANSFERENCIA'), ('WEBPAY');
 
 INSERT INTO EstadoPago(nombre_estado_pago)
 VALUES ('PENDIENTE'), ('APROBADO'), ('RECHAZADO'), ('REEMBOLSADO');
+
+INSERT INTO Region(nombre_region)
+VALUES ('Region Metropolitana');
+
+INSERT INTO Comuna(ID_region_comuna, nombre_comuna)
+SELECT ID_region, 'Santiago'
+FROM Region
+WHERE nombre_region = 'Region Metropolitana';
+
+INSERT INTO Marca(nombre_marca)
+VALUES ('Toyota'), ('Hyundai'), ('Kia');
+
+INSERT INTO Modelo(ID_marca_modelo, nombre_modelo)
+SELECT ID_marca, 'Corolla'
+FROM Marca
+WHERE nombre_marca = 'Toyota';
+
+INSERT INTO Modelo(ID_marca_modelo, nombre_modelo)
+SELECT ID_marca, 'Tucson'
+FROM Marca
+WHERE nombre_marca = 'Hyundai';
+
+INSERT INTO Modelo(ID_marca_modelo, nombre_modelo)
+SELECT ID_marca, 'Rio'
+FROM Marca
+WHERE nombre_marca = 'Kia';
 GO
 
 /* ================================================================
@@ -944,6 +978,130 @@ BEGIN
 END;
 GO
 
+CREATE TRIGGER trg_validar_tipo_proveedor
+ON Proveedor
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN TipoProveedor tp
+            ON tp.ID_tipo_proveedor = i.ID_tipo_proveedor_proveedor
+        WHERE (
+            tp.nombre_tipo_proveedor = 'PERSONA'
+            AND i.ID_persona_proveedor IS NULL
+        )
+        OR (
+            tp.nombre_tipo_proveedor = 'EMPRESA'
+            AND (
+                i.ID_persona_proveedor IS NOT NULL
+                OR i.razon_social_proveedor IS NULL
+                OR i.rut_proveedor IS NULL
+            )
+        )
+    )
+        THROW 54001, 'Los datos no coinciden con el tipo de proveedor.', 1;
+END;
+GO
+
+CREATE TRIGGER trg_validar_vehiculo_sede_actual
+ON Vehiculo
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN SedeProveedor s
+            ON s.ID_sede_proveedor = i.ID_sede_actual_vehiculo
+        WHERE i.ID_sede_actual_vehiculo IS NOT NULL
+          AND s.ID_proveedor_sede_proveedor <> i.ID_proveedor_vehiculo
+    )
+        THROW 54002, 'La sede actual no pertenece al proveedor del vehiculo.', 1;
+END;
+GO
+
+CREATE TRIGGER trg_validar_vehiculo_sede
+ON VehiculoSede
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN Vehiculo v
+            ON v.ID_vehiculo = i.ID_vehiculo_vehiculo_sede
+        INNER JOIN SedeProveedor s
+            ON s.ID_sede_proveedor = i.ID_sede_proveedor_vehiculo_sede
+        WHERE v.ID_proveedor_vehiculo <> s.ID_proveedor_sede_proveedor
+    )
+        THROW 54003, 'La sede habilitada no pertenece al proveedor del vehiculo.', 1;
+END;
+GO
+
+CREATE TRIGGER trg_validar_reserva_sedes
+ON Reserva
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN Vehiculo v
+            ON v.ID_vehiculo = i.ID_vehiculo_reserva
+        INNER JOIN SedeProveedor sr
+            ON sr.ID_sede_proveedor = i.ID_sede_retiro_reserva
+        INNER JOIN SedeProveedor sd
+            ON sd.ID_sede_proveedor = i.ID_sede_devolucion_reserva
+        WHERE v.ID_proveedor_vehiculo <> sr.ID_proveedor_sede_proveedor
+           OR v.ID_proveedor_vehiculo <> sd.ID_proveedor_sede_proveedor
+    )
+        THROW 54004, 'Las sedes de la reserva no pertenecen al proveedor.', 1;
+END;
+GO
+
+CREATE TRIGGER trg_validar_arriendo_sedes
+ON Arriendo
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS
+    (
+        SELECT 1
+        FROM inserted i
+        INNER JOIN Reserva r
+            ON r.ID_reserva = i.ID_reserva_arriendo
+        INNER JOIN Vehiculo v
+            ON v.ID_vehiculo = r.ID_vehiculo_reserva
+        INNER JOIN SedeProveedor sr
+            ON sr.ID_sede_proveedor = i.ID_sede_retiro_real_arriendo
+        LEFT JOIN SedeProveedor sd
+            ON sd.ID_sede_proveedor = i.ID_sede_devolucion_real_arriendo
+        WHERE v.ID_proveedor_vehiculo <> sr.ID_proveedor_sede_proveedor
+           OR (
+                sd.ID_sede_proveedor IS NOT NULL
+                AND v.ID_proveedor_vehiculo <> sd.ID_proveedor_sede_proveedor
+           )
+    )
+        THROW 54005, 'Las sedes del arriendo no pertenecen al proveedor.', 1;
+END;
+GO
+
 /* ================================================================
    12. PROCEDIMIENTO: REGISTRAR PROVEEDOR
    ================================================================ */
@@ -1045,6 +1203,9 @@ BEGIN
         IF @fecha_fin <= @fecha_inicio
             THROW 51004, 'La fecha de devolucion debe ser posterior al retiro.', 1;
 
+        IF @fecha_inicio < CAST(GETDATE() AS DATE)
+            THROW 51005, 'La fecha de inicio no puede ser anterior a hoy.', 1;
+
         IF NOT EXISTS
         (
             SELECT 1
@@ -1052,7 +1213,7 @@ BEGIN
             WHERE ID_usuario_cliente = @ID_usuario_cliente
               AND activo_cliente = 1
         )
-            THROW 51005, 'El cliente no existe o esta inactivo.', 1;
+            THROW 51006, 'El cliente no existe o esta inactivo.', 1;
 
         SELECT
             @ID_proveedor = v.ID_proveedor_vehiculo,
@@ -1074,13 +1235,13 @@ BEGIN
                WHERE nombre_estado_vehiculo = 'DISPONIBLE');
 
         IF @ID_proveedor IS NULL
-            THROW 51006, 'El vehiculo no existe o no esta disponible.', 1;
+            THROW 51007, 'El vehiculo no existe o no esta disponible.', 1;
 
         IF @estado_publicacion <> 'PUBLICADO'
-            THROW 51007, 'El vehiculo no esta publicado.', 1;
+            THROW 51008, 'El vehiculo no esta publicado.', 1;
 
         IF @estado_proveedor <> 'APROBADO'
-            THROW 51008, 'El proveedor no esta aprobado.', 1;
+            THROW 51009, 'El proveedor no esta aprobado.', 1;
 
         IF EXISTS
         (
@@ -1090,7 +1251,7 @@ BEGIN
                   (@ID_sede_retiro, @ID_sede_devolucion)
               AND ID_proveedor_sede_proveedor <> @ID_proveedor
         )
-            THROW 51009, 'Las sedes no pertenecen al proveedor del vehiculo.', 1;
+            THROW 51010, 'Las sedes no pertenecen al proveedor del vehiculo.', 1;
 
         IF NOT EXISTS
         (
@@ -1100,7 +1261,7 @@ BEGIN
               AND vs.ID_sede_proveedor_vehiculo_sede = @ID_sede_retiro
               AND vs.disponible_para_entrega = 1
         )
-            THROW 51010, 'La sede de retiro no esta habilitada.', 1;
+            THROW 51011, 'La sede de retiro no esta habilitada.', 1;
 
         IF NOT EXISTS
         (
@@ -1110,7 +1271,7 @@ BEGIN
               AND vs.ID_sede_proveedor_vehiculo_sede = @ID_sede_devolucion
               AND vs.disponible_para_devolucion = 1
         )
-            THROW 51011, 'La sede de devolucion no esta habilitada.', 1;
+            THROW 51012, 'La sede de devolucion no esta habilitada.', 1;
 
         IF EXISTS
         (
@@ -1123,7 +1284,7 @@ BEGIN
               AND @fecha_inicio < r.fecha_fin_reserva
               AND @fecha_fin > r.fecha_inicio_reserva
         )
-            THROW 51012, 'El vehiculo ya esta reservado en esas fechas.', 1;
+            THROW 51013, 'El vehiculo ya esta reservado en esas fechas.', 1;
 
         SELECT @estado_reserva = ID_estado_reserva
         FROM EstadoReserva
@@ -1158,6 +1319,8 @@ BEGIN
 
         COMMIT TRANSACTION;
 
+        SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+
         SELECT *
         FROM vw_ReservasDetalle
         WHERE ID_reserva = @ID_reserva;
@@ -1165,6 +1328,7 @@ BEGIN
     BEGIN CATCH
         IF XACT_STATE() <> 0
             ROLLBACK TRANSACTION;
+        SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
         THROW;
     END CATCH;
 END;
@@ -1594,6 +1758,83 @@ GO
 /* ================================================================
    20. PROCEDIMIENTO: REPORTE DE PROVEEDORES CON CURSOR
    ================================================================ */
+
+CREATE OR ALTER PROCEDURE sp_CancelarReserva
+    @ID_reserva INT,
+    @ID_usuario INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DECLARE @ownerId INT;
+    DECLARE @stateName VARCHAR(50);
+    DECLARE @cancelledState INT;
+    DECLARE @refusedPaymentState INT;
+    DECLARE @refundedPaymentState INT;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        SELECT
+            @ownerId = r.ID_usuario_cliente_reserva,
+            @stateName = er.nombre_estado_reserva
+        FROM Reserva r WITH (UPDLOCK, HOLDLOCK)
+        INNER JOIN EstadoReserva er
+            ON er.ID_estado_reserva = r.ID_estado_reserva_reserva
+        WHERE r.ID_reserva = @ID_reserva;
+
+        IF @ownerId IS NULL
+            THROW 55001, 'La reserva no existe.', 1;
+
+        IF @ownerId <> @ID_usuario
+            THROW 55002, 'El usuario no puede cancelar esta reserva.', 1;
+
+        IF @stateName NOT IN ('PENDIENTE', 'CONFIRMADA')
+            THROW 55003, 'La reserva no puede ser cancelada.', 1;
+
+        SELECT @cancelledState = ID_estado_reserva
+        FROM EstadoReserva
+        WHERE nombre_estado_reserva = 'CANCELADA';
+
+        SELECT @refusedPaymentState = ID_estado_pago
+        FROM EstadoPago
+        WHERE nombre_estado_pago = 'RECHAZADO';
+
+        SELECT @refundedPaymentState = ID_estado_pago
+        FROM EstadoPago
+        WHERE nombre_estado_pago = 'REEMBOLSADO';
+
+        UPDATE Reserva
+        SET ID_estado_reserva_reserva = @cancelledState
+        WHERE ID_reserva = @ID_reserva;
+
+        UPDATE p
+        SET ID_estado_pago_pago =
+            CASE
+                WHEN ep.nombre_estado_pago = 'APROBADO'
+                    THEN @refundedPaymentState
+                ELSE @refusedPaymentState
+            END
+        FROM Pago p
+        INNER JOIN EstadoPago ep
+            ON ep.ID_estado_pago = p.ID_estado_pago_pago
+        WHERE p.ID_reserva_pago = @ID_reserva
+          AND ep.nombre_estado_pago IN ('PENDIENTE', 'APROBADO');
+
+        COMMIT TRANSACTION;
+
+        SELECT *
+        FROM vw_ReservasDetalle
+        WHERE ID_reserva = @ID_reserva;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() <> 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
 
 CREATE PROCEDURE sp_ReporteProveedores
 AS

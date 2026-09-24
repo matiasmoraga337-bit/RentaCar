@@ -1,0 +1,16 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: rentacar-sql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?Define MSSQL_SA_PASSWORD in .env}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - rentacar_sql_data:/var/opt/mssql
+    restart: unless-stopped
+
+volumes:
+  rentacar_sql_data:
