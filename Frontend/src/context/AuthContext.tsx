@@ -4,7 +4,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { apiRequest } from '../services/api';
+import { apiRequest, tokenKey } from '../services/api';
 
 import {
   AuthContext,
@@ -22,7 +22,6 @@ interface ProfileResponse {
   user: ProfileUser;
   roles: string[];
 }
-const tokenKey = 'rentacar_token';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);

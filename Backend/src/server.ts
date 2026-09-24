@@ -5,6 +5,7 @@ import express from 'express';
 import { env } from './config/env.js';
 import { getDatabasePool } from './database/sql.js';
 import authRouter from './routes/auth.js';
+import adminRouter from './routes/admin.js';
 import providersRouter from './routes/providers.js';
 import vehiclesRouter from './routes/vehicles.js';
 import catalogsRouter from './routes/catalogs.js';
@@ -17,6 +18,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use('/api/auth', authRouter);
+app.use('/api/admin', adminRouter);
 app.use('/api/proveedores', providersRouter);
 app.use('/api/vehiculos', vehiclesRouter);
 app.use('/api/catalogos', catalogsRouter);
