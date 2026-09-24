@@ -20,11 +20,24 @@ interface VehicleDetail {
   branches: { ID_sede_proveedor: number; nombre_sede_proveedor: string; direccion_sede_proveedor: string }[];
 }
 
+interface VehicleReviews {
+  items: {
+    ID_resena: number;
+    calificacion_resena: number;
+    comentario_resena: string | null;
+    fecha_resena: string;
+    nombre_cliente: string;
+  }[];
+  total: number;
+  promedio: number | null;
+}
+
 export function VehicleDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [detail, setDetail] = useState<VehicleDetail | null>(null);
+  const [reviews, setReviews] = useState<VehicleReviews | null>(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [branchId, setBranchId] = useState('');
@@ -33,9 +46,13 @@ export function VehicleDetailPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    apiRequest<VehicleDetail>(`/vehiculos/${id}`)
-      .then((result) => {
+    Promise.all([
+      apiRequest<VehicleDetail>(`/vehiculos/${id}`),
+      apiRequest<VehicleReviews>(`/vehiculos/${id}/resenas`),
+    ])
+      .then(([result, reviewsResult]) => {
         setDetail(result);
+        setReviews(reviewsResult);
         if (result.branches[0]) setBranchId(String(result.branches[0].ID_sede_proveedor));
       })
       .catch((requestError: Error) => setError(requestError.message));
@@ -140,6 +157,30 @@ export function VehicleDetailPage() {
             <div className="login-callout"><p>Inicia sesión para reservar este vehículo.</p><Link className="button button-primary" to="/login">Iniciar sesión</Link></div>
           )}
         </div>
+      </section>
+      <section className="reviews-section">
+        <div className="reviews-heading">
+          <h2>Reseñas de clientes</h2>
+          {reviews && reviews.promedio !== null && (
+            <span className="reviews-avg">★ {reviews.promedio} <small>({reviews.total} reseñas)</small></span>
+          )}
+        </div>
+        {reviews && reviews.items.length > 0 ? (
+          <div className="reviews-list">
+            {reviews.items.map((review) => (
+              <article key={review.ID_resena} className="review-card">
+                <div className="review-stars">{"★".repeat(review.calificacion_resena)}{"☆".repeat(5 - review.calificacion_resena)}</div>
+                {review.comentario_resena && <p>{review.comentario_resena}</p>}
+                <footer>
+                  <strong>{review.nombre_cliente}</strong>
+                  <span>{new Date(review.fecha_resena).toLocaleDateString('es-CL')}</span>
+                </footer>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="reviews-empty">Aún no hay reseñas para este vehículo. Sé el primero en calificar tu arriendo.</p>
+        )}
       </section>
     </main>
   );

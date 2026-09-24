@@ -218,6 +218,47 @@ router.post('/:id/sedes', authenticateToken, async (request, response, next) => 
   }
 });
 
+router.get('/:id/sedes', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+
+  if (!providerId) {
+    response.status(400).json({ message: 'Proveedor invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdmin = request.user!.roles.includes('ADMIN');
+
+    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
+      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .query(`
+        SELECT
+          s.ID_sede_proveedor,
+          s.nombre_sede_proveedor,
+          s.direccion_sede_proveedor,
+          c.nombre_comuna,
+          r.nombre_region
+        FROM SedeProveedor s
+        INNER JOIN Comuna c ON c.ID_comuna = s.ID_comuna_sede_proveedor
+        INNER JOIN Region r ON r.ID_region = c.ID_region_comuna
+        WHERE s.ID_proveedor_sede_proveedor = @providerId
+          AND s.activo_sede_proveedor = 1
+        ORDER BY s.nombre_sede_proveedor;
+      `);
+
+    response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/:id/vehiculos', authenticateToken, async (request, response, next) => {
   const providerId = parseId(request.params.id);
 

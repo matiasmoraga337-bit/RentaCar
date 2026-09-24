@@ -107,6 +107,56 @@ router.get('/:id', async (request, response, next) => {
   }
 });
 
+router.get('/:id/resenas', async (request, response, next) => {
+  const id = Number(request.params.id);
+
+  if (!Number.isInteger(id) || id <= 0) {
+    response.status(400).json({ message: 'Identificador de vehiculo invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const result = await pool
+      .request()
+      .input('idVehiculo', sql.Int, id)
+      .query(`
+        SELECT
+          res.ID_resena,
+          res.calificacion_resena,
+          res.comentario_resena,
+          res.fecha_resena,
+          CONCAT(pe.nombres_persona, ' ', pe.apellido_paterno_persona)
+            AS nombre_cliente
+        FROM Resena res
+        INNER JOIN Arriendo a
+          ON a.ID_arriendo = res.ID_arriendo_resena
+        INNER JOIN Reserva re
+          ON re.ID_reserva = a.ID_reserva_arriendo
+        INNER JOIN Vehiculo v
+          ON v.ID_vehiculo = re.ID_vehiculo_reserva
+        INNER JOIN Cliente cl
+          ON cl.ID_usuario_cliente = re.ID_usuario_cliente_reserva
+        INNER JOIN Usuario u
+          ON u.ID_usuario = cl.ID_usuario_cliente
+        INNER JOIN Persona pe
+          ON pe.ID_persona = u.ID_persona_usuario
+        WHERE v.ID_vehiculo = @idVehiculo
+          AND res.activo_resena = 1
+        ORDER BY res.fecha_resena DESC;
+      `);
+
+    const reviews = result.recordset;
+    const promedio = reviews.length > 0
+      ? Number((reviews.reduce((sum, item) => sum + item.calificacion_resena, 0) / reviews.length).toFixed(1))
+      : null;
+
+    response.json({ items: reviews, total: reviews.length, promedio });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.patch('/:id/publicacion', authenticateToken, async (request, response, next) => {
   const id = Number(request.params.id);
   const state = typeof request.body?.estado === 'string'

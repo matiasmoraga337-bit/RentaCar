@@ -849,7 +849,7 @@ WHERE p.ID_estado_proveedor_proveedor =
   AND ep.nombre_estado_publicacion_vehiculo = 'PUBLICADO';
 GO
 
-CREATE VIEW vw_ReservasDetalle
+CREATE OR ALTER VIEW vw_ReservasDetalle
 AS
 SELECT
     re.ID_reserva,
@@ -868,6 +868,9 @@ SELECT
     sr.nombre_sede_proveedor AS sede_retiro,
     sd.nombre_sede_proveedor AS sede_devolucion,
     er.nombre_estado_reserva,
+    a.ID_arriendo,
+    ea.nombre_estado_arriendo AS estado_arriendo,
+    CASE WHEN res.ID_resena IS NULL THEN 0 ELSE 1 END AS resenado,
     ep.nombre_estado_pago,
     pg.monto_pago,
     pg.fecha_pago
@@ -892,6 +895,12 @@ INNER JOIN SedeProveedor sd
     ON sd.ID_sede_proveedor = re.ID_sede_devolucion_reserva
 INNER JOIN EstadoReserva er
     ON er.ID_estado_reserva = re.ID_estado_reserva_reserva
+LEFT JOIN Arriendo a
+    ON a.ID_reserva_arriendo = re.ID_reserva
+LEFT JOIN EstadoArriendo ea
+    ON ea.ID_estado_arriendo = a.ID_estado_arriendo_arriendo
+LEFT JOIN Resena res
+    ON res.ID_arriendo_resena = a.ID_arriendo
 LEFT JOIN Pago pg
     ON pg.ID_reserva_pago = re.ID_reserva
 LEFT JOIN EstadoPago ep

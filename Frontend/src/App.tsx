@@ -4,6 +4,7 @@ import { useAuth } from './context/useAuth';
 import { AdminPage } from './pages/AdminPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
+import { OperationsPage } from './pages/OperationsPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { ProviderPage } from './pages/ProviderPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -26,8 +27,9 @@ function Header() {
         {user ? (
           <>
             <Link className={location.pathname === '/perfil' ? 'active' : ''} to="/perfil">Mi perfil</Link>
-            <Link className={location.pathname === '/proveedor' ? 'active' : ''} to="/proveedor">Proveedor</Link>
             {user.roles.includes('ADMIN') && <Link className={location.pathname === '/admin' ? 'active' : ''} to="/admin">Admin</Link>}
+            {(user.roles.includes('PROVEEDOR') || user.roles.includes('ADMIN')) && <Link className={location.pathname === '/operaciones' ? 'active' : ''} to="/operaciones">Operaciones</Link>}
+            {user.roles.includes('PROVEEDOR') && <Link className={location.pathname === '/proveedor' ? 'active' : ''} to="/proveedor">Proveedor</Link>}
             <button className="nav-logout" onClick={logout}>Salir</button>
           </>
         ) : (
@@ -53,6 +55,15 @@ function AdminRoute() {
   return user.roles.includes('ADMIN') ? <AdminPage /> : <Navigate to="/perfil" replace />;
 }
 
+function OperationsRoute() {
+  const { user, loading } = useAuth();
+
+  if (loading) return <div className="loading-state">Cargando tu sesión...</div>;
+  if (!user) return <Navigate to="/login" replace />;
+  const allowed = user.roles.some((role) => role === 'PROVEEDOR' || role === 'ADMIN');
+  return allowed ? <OperationsPage /> : <Navigate to="/perfil" replace />;
+}
+
 function App() {
   const { loading } = useAuth();
 
@@ -68,6 +79,7 @@ function App() {
         <Route path="/vehiculos" element={<VehiclesPage />} />
         <Route path="/vehiculos/:id" element={<VehicleDetailPage />} />
         <Route path="/perfil" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+        <Route path="/operaciones" element={<OperationsRoute />} />
         <Route path="/proveedor" element={<ProtectedRoute><ProviderPage /></ProtectedRoute>} />
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="*" element={<Navigate to="/" replace />} />
