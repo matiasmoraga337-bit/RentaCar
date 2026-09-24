@@ -92,12 +92,12 @@ router.post('/', authenticateToken, async (request, response, next) => {
 
       const providerResult = await transaction
         .request()
-        .input('typeId', sql.Int, typeId)
-        .input('personId', sql.Int, personId)
-        .input('name', sql.NVarChar(150), name)
-        .input('businessName', sql.NVarChar(150), body.razonSocial?.trim() || null)
-        .input('rut', sql.VarChar(12), body.rutProveedor?.trim() || null)
-        .input('phone', sql.VarChar(20), body.telefono?.trim() || null)
+        .input('ID_tipo_proveedor', sql.Int, typeId)
+        .input('ID_persona_proveedor', sql.Int, personId)
+        .input('nombre_comercial', sql.NVarChar(150), name)
+        .input('razon_social', sql.NVarChar(150), body.razonSocial?.trim() || null)
+        .input('rut_proveedor', sql.VarChar(12), body.rutProveedor?.trim() || null)
+        .input('telefono', sql.VarChar(20), body.telefono?.trim() || null)
         .input('email', sql.VarChar(150), body.email?.trim().toLowerCase() || null)
         .execute('sp_RegistrarProveedor');
 
@@ -336,6 +336,8 @@ router.post('/:id/vehiculos', authenticateToken, async (request, response, next)
         .input('mileage', sql.Int, body.kilometraje)
         .input('dailyPrice', sql.Decimal(12, 2), body.precioDiario)
         .query(`
+          DECLARE @insertedVehiculo TABLE (ID_vehiculo INT);
+
           INSERT INTO Vehiculo
           (
             ID_proveedor_vehiculo,
@@ -352,7 +354,7 @@ router.post('/:id/vehiculos', authenticateToken, async (request, response, next)
             kilometraje_vehiculo,
             precio_diario_base_vehiculo
           )
-          OUTPUT INSERTED.ID_vehiculo
+          OUTPUT INSERTED.ID_vehiculo INTO @insertedVehiculo
           VALUES
           (
             @providerId,
@@ -369,6 +371,8 @@ router.post('/:id/vehiculos', authenticateToken, async (request, response, next)
             @mileage,
             @dailyPrice
           );
+
+          SELECT ID_vehiculo FROM @insertedVehiculo;
         `);
 
       const vehicleId = vehicleResult.recordset[0].ID_vehiculo as number;
