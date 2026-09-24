@@ -11,6 +11,7 @@ import vehiclesRouter from './routes/vehicles.js';
 import catalogsRouter from './routes/catalogs.js';
 import paymentsRouter from './routes/payments.js';
 import reservationsRouter from './routes/reservations.js';
+import rentalsRouter from './routes/rentals.js';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/api/proveedores', providersRouter);
 app.use('/api/vehiculos', vehiclesRouter);
 app.use('/api/catalogos', catalogsRouter);
 app.use('/api/reservas', reservationsRouter);
+app.use('/api/arriendos', rentalsRouter);
 app.use('/api', paymentsRouter);
 
 app.get('/api/health', (_request, response) => {
