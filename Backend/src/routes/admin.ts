@@ -159,6 +159,64 @@ router.get('/reservas', async (_request, response, next) => {
   }
 });
 
+router.get('/reportes/proveedores', async (_request, response, next) => {
+  try {
+    const pool = await getDatabasePool();
+    const result = await pool.request().execute('sp_ReporteProveedores');
+    response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/reportes/tipos-proveedor', async (_request, response, next) => {
+  try {
+    const pool = await getDatabasePool();
+    const result = await pool.request().execute('sp_ReporteTiposProveedor');
+    response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/auditoria', async (request, response, next) => {
+  const table = typeof request.query.tabla === 'string' && request.query.tabla.trim()
+    ? request.query.tabla.trim().toUpperCase()
+    : null;
+
+  try {
+    const pool = await getDatabasePool();
+    const result = await pool
+      .request()
+      .input('table', sql.VarChar(100), table)
+      .query(`
+        SELECT TOP (100)
+          a.ID_auditoria,
+          a.tabla_afectada_auditoria,
+          a.ID_registro_auditoria,
+          a.accion_auditoria,
+          a.valor_anterior_auditoria,
+          a.valor_nuevo_auditoria,
+          a.fecha_hora_auditoria,
+          a.descripcion_auditoria,
+          COALESCE(CONCAT(pe.nombres_persona, ' ', pe.apellido_paterno_persona), 'Sistema')
+            AS nombre_usuario,
+          u.email_usuario
+        FROM Auditoria a
+        LEFT JOIN Usuario u
+          ON u.ID_usuario = a.ID_usuario_auditoria
+        LEFT JOIN Persona pe
+          ON pe.ID_persona = u.ID_persona_usuario
+        WHERE (@table IS NULL OR a.tabla_afectada_auditoria = @table)
+        ORDER BY a.ID_auditoria DESC;
+      `);
+
+    response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.patch('/proveedores/:id/estado', async (request, response, next) => {
   const providerId = parseId(request.params.id);
   const state = typeof request.body?.estado === 'string'

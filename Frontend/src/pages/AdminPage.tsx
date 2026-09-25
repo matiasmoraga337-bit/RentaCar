@@ -63,6 +63,33 @@ interface AdminReservation {
   monto_pago: number | null;
 }
 
+interface ProviderReport {
+  ID_proveedor: number;
+  nombre_proveedor: string;
+  cantidad_vehiculos: number;
+  cantidad_publicados: number;
+  cantidad_reservas: number;
+  total_pagado: number;
+}
+
+interface ProviderTypeReport {
+  nombre_tipo_proveedor: string;
+  cantidad_proveedores: number;
+}
+
+interface AuditEntry {
+  ID_auditoria: number;
+  tabla_afectada_auditoria: string;
+  ID_registro_auditoria: number | null;
+  accion_auditoria: string;
+  valor_anterior_auditoria: string | null;
+  valor_nuevo_auditoria: string | null;
+  fecha_hora_auditoria: string;
+  descripcion_auditoria: string | null;
+  nombre_usuario: string;
+  email_usuario: string | null;
+}
+
 function badgeClass(value: string) {
   const key = value.toUpperCase();
   if (key.includes('APROBADO') || key.includes('PUBLICADO') || key.includes('COMPLETADA') || key.includes('CONFIRMADA')) return 'state-pill badge-aprobado';
@@ -80,22 +107,31 @@ export function AdminPage() {
   const [providers, setProviders] = useState<AdminProvider[]>([]);
   const [vehicles, setVehicles] = useState<AdminVehicle[]>([]);
   const [reservations, setReservations] = useState<AdminReservation[]>([]);
+  const [report, setReport] = useState<ProviderReport[]>([]);
+  const [providerTypes, setProviderTypes] = useState<ProviderTypeReport[]>([]);
+  const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
 
   const loadAll = async () => {
     try {
-      const [summaryResult, providerResult, vehicleResult, reservationResult] = await Promise.all([
+      const [summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult, auditResult] = await Promise.all([
         apiRequest<SummaryResponse>('/admin/resumen'),
         apiRequest<AdminProvider[]>('/admin/proveedores'),
         apiRequest<AdminVehicle[]>('/admin/vehiculos'),
         apiRequest<AdminReservation[]>('/admin/reservas'),
+        apiRequest<ProviderReport[]>('/admin/reportes/proveedores'),
+        apiRequest<ProviderTypeReport[]>('/admin/reportes/tipos-proveedor'),
+        apiRequest<AuditEntry[]>('/admin/auditoria'),
       ]);
       setSummary(summaryResult);
       setProviders(providerResult);
       setVehicles(vehicleResult);
       setReservations(reservationResult);
+      setReport(reportResult);
+      setProviderTypes(typeResult);
+      setAudit(auditResult);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible cargar el panel.');
     } finally {
@@ -111,13 +147,19 @@ export function AdminPage() {
       apiRequest<AdminProvider[]>('/admin/proveedores'),
       apiRequest<AdminVehicle[]>('/admin/vehiculos'),
       apiRequest<AdminReservation[]>('/admin/reservas'),
+      apiRequest<ProviderReport[]>('/admin/reportes/proveedores'),
+      apiRequest<ProviderTypeReport[]>('/admin/reportes/tipos-proveedor'),
+      apiRequest<AuditEntry[]>('/admin/auditoria'),
     ])
-      .then(([summaryResult, providerResult, vehicleResult, reservationResult]) => {
+      .then(([summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult, auditResult]) => {
         if (!active) return;
         setSummary(summaryResult);
         setProviders(providerResult);
         setVehicles(vehicleResult);
         setReservations(reservationResult);
+        setReport(reportResult);
+        setProviderTypes(typeResult);
+        setAudit(auditResult);
       })
       .catch((requestError: Error) => {
         if (!active) return;
@@ -329,6 +371,100 @@ export function AdminPage() {
                     <td><span className={badgeClass(reservation.nombre_estado_reserva)}>{reservation.nombre_estado_reserva}</span></td>
                     <td>{reservation.nombre_estado_pago ?? '—'}</td>
                     <td>{reservation.monto_pago !== null ? `$${Number(reservation.monto_pago).toLocaleString('es-CL')}` : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="admin-section">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">REPORTES</span>
+            <h2>Resumen por proveedor</h2>
+          </div>
+          <span className="catalog-count">{report.length}</span>
+        </div>
+
+        {providerTypes.length > 0 && (
+          <div className="report-types">
+            {providerTypes.map((type) => (
+              <div key={type.nombre_tipo_proveedor} className="report-type">
+                <span className="profile-label">{type.nombre_tipo_proveedor}</span>
+                <strong>{type.cantidad_proveedores}</strong>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {report.length === 0 ? (
+          <div className="empty-state compact-empty"><span>✦</span><p>Aún no hay proveedores para reportar.</p></div>
+        ) : (
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Proveedor</th>
+                  <th>Vehículos</th>
+                  <th>Publicados</th>
+                  <th>Reservas</th>
+                  <th>Total pagado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.map((row) => (
+                  <tr key={row.ID_proveedor}>
+                    <td><strong>{row.nombre_proveedor}</strong></td>
+                    <td>{row.cantidad_vehiculos}</td>
+                    <td>{row.cantidad_publicados}</td>
+                    <td>{row.cantidad_reservas}</td>
+                    <td>${Number(row.total_pagado).toLocaleString('es-CL')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="admin-section">
+        <div className="section-heading">
+          <div>
+            <span className="eyebrow">AUDITORÍA</span>
+            <h2>Cambios de estado registrados por triggers</h2>
+          </div>
+          <span className="catalog-count">{audit.length}</span>
+        </div>
+        {audit.length === 0 ? (
+          <div className="empty-state compact-empty"><span>✦</span><p>Sin movimientos de auditoría todavía.</p></div>
+        ) : (
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tabla</th>
+                  <th>Registro</th>
+                  <th>Acción</th>
+                  <th>Cambio</th>
+                  <th>Usuario</th>
+                </tr>
+              </thead>
+              <tbody>
+                {audit.map((entry) => (
+                  <tr key={entry.ID_auditoria}>
+                    <td>{new Date(entry.fecha_hora_auditoria).toLocaleString('es-CL')}</td>
+                    <td>{entry.tabla_afectada_auditoria}</td>
+                    <td>{entry.ID_registro_auditoria ?? '—'}</td>
+                    <td><span className="state-pill badge-suspendido">{entry.accion_auditoria}</span></td>
+                    <td>
+                      {entry.valor_anterior_auditoria || entry.valor_nuevo_auditoria
+                        ? `${entry.valor_anterior_auditoria ?? '—'} → ${entry.valor_nuevo_auditoria ?? '—'}`
+                        : entry.descripcion_auditoria ?? '—'}
+                    </td>
+                    <td><strong>{entry.nombre_usuario}</strong><span className="table-sub">{entry.email_usuario ?? 'Sin usuario'}</span></td>
                   </tr>
                 ))}
               </tbody>
