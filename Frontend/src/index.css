@@ -183,3 +183,9 @@ a {
     transition-duration: 0.01ms !important;
   }
 }
+
+@media (min-width: 1440px) {
+  :root {
+    --container: min(92vw, 1560px);
+  }
+}

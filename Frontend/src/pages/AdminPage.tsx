@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 
+import { Message } from '../components/Message';
+import { PageHeader } from '../components/PageHeader';
+import { SectionHeading } from '../components/SectionHeading';
 import { StatusBadge } from '../components/StatusBadge';
 import { apiRequest } from '../services/api';
 
@@ -311,15 +314,13 @@ export function AdminPage() {
 
   return (
     <main className="admin-page">
-      <section className="profile-header">
-        <div>
-          <span className="eyebrow">PANEL DE ADMINISTRACIÓN</span>
-          <h1>Supervisa el marketplace.</h1>
-          <p>Aprueba proveedores, publica flota y sigue el estado de las reservas.</p>
-        </div>
-      </section>
+      <PageHeader
+        eyebrow="PANEL DE ADMINISTRACIÓN"
+        title="Supervisa el marketplace."
+        description="Aprueba proveedores, publica flota y sigue el estado de las reservas."
+      />
 
-      {error && <p className="form-error admin-alert" role="alert">{error}</p>}
+      {error && <Message tone="error" className="admin-alert">{error}</Message>}
 
       {totals && (
         <section className="kpi-grid" aria-label="Indicadores del sistema">
@@ -332,7 +333,7 @@ export function AdminPage() {
       )}
 
       <section className="admin-section">
-        <div className="section-heading"><div><span className="eyebrow">USUARIOS</span><h2>Gestiona acceso y estado</h2></div><span className="catalog-count">{usersTotal}</span></div>
+        <SectionHeading eyebrow="USUARIOS" title="Gestiona acceso y estado"><span className="catalog-count">{usersTotal}</span></SectionHeading>
         <div className="table-wrap">
           <table className="admin-table">
             <thead><tr><th>Usuario</th><th>Correo</th><th>Roles</th><th>Confirmación</th><th>Estado</th><th>Acciones</th></tr></thead>
@@ -352,13 +353,7 @@ export function AdminPage() {
       </section>
 
       <section className="admin-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">GESTIÓN DE PROVEEDORES</span>
-            <h2>Aprueba o suspende proveedores</h2>
-          </div>
-          <span className="catalog-count">{providers.length}</span>
-        </div>
+        <SectionHeading eyebrow="GESTIÓN DE PROVEEDORES" title="Aprueba o suspende proveedores"><span className="catalog-count">{providers.length}</span></SectionHeading>
         {providers.length === 0 ? (
           <div className="empty-state compact-empty"><span>✦</span><p>Aún no hay proveedores registrados.</p></div>
         ) : (
@@ -406,13 +401,7 @@ export function AdminPage() {
       </section>
 
       <section className="admin-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">GESTIÓN DE FLOTA</span>
-            <h2>Publica o suspende vehículos</h2>
-          </div>
-          <span className="catalog-count">{vehicles.length}</span>
-        </div>
+        <SectionHeading eyebrow="GESTIÓN DE FLOTA" title="Publica o suspende vehículos"><span className="catalog-count">{vehicles.length}</span></SectionHeading>
         {vehicles.length === 0 ? (
           <div className="empty-state compact-empty"><span>✦</span><p>Aún no hay vehículos registrados.</p></div>
         ) : (
@@ -457,13 +446,7 @@ export function AdminPage() {
       </section>
 
       <section className="admin-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">SEGUIMIENTO</span>
-            <h2>Reservas del sistema</h2>
-          </div>
-          <span className="catalog-count">{reservations.length}</span>
-        </div>
+        <SectionHeading eyebrow="SEGUIMIENTO" title="Reservas del sistema"><span className="catalog-count">{reservations.length}</span></SectionHeading>
         {reservations.length === 0 ? (
           <div className="empty-state compact-empty"><span>✦</span><p>Aún no hay reservas registradas.</p></div>
         ) : (
@@ -499,13 +482,7 @@ export function AdminPage() {
       </section>
 
       <section className="admin-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">REPORTES</span>
-            <h2>Resumen por proveedor</h2>
-          </div>
-          <span className="catalog-count">{report.length}</span>
-        </div>
+        <SectionHeading eyebrow="REPORTES" title="Resumen por proveedor"><span className="catalog-count">{report.length}</span></SectionHeading>
 
         {providerTypes.length > 0 && (
           <div className="report-types">
@@ -549,13 +526,7 @@ export function AdminPage() {
       </section>
 
       <section className="admin-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">AUDITORÍA</span>
-            <h2>Cambios de estado registrados por triggers</h2>
-          </div>
-          <span className="catalog-count">{auditTotal}</span>
-        </div>
+        <SectionHeading eyebrow="AUDITORÍA" title="Cambios de estado registrados por triggers"><span className="catalog-count">{auditTotal}</span></SectionHeading>
         {audit.length === 0 ? (
           <div className="empty-state compact-empty"><span>✦</span><p>Sin movimientos de auditoría todavía.</p></div>
         ) : (
