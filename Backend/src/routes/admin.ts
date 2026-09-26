@@ -184,14 +184,24 @@ router.get('/auditoria', async (request, response, next) => {
   const table = typeof request.query.tabla === 'string' && request.query.tabla.trim()
     ? request.query.tabla.trim().toUpperCase()
     : null;
+  const page = Math.max(1, Number(request.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(request.query.pageSize) || 20));
 
   try {
     const pool = await getDatabasePool();
     const result = await pool
       .request()
       .input('table', sql.VarChar(100), table)
+      .input('page', sql.Int, page)
+      .input('pageSize', sql.Int, pageSize)
       .query(`
-        SELECT TOP (100)
+        DECLARE @total INT;
+
+        SELECT @total = COUNT(*)
+        FROM Auditoria a
+        WHERE (@table IS NULL OR a.tabla_afectada_auditoria = @table);
+
+        SELECT
           a.ID_auditoria,
           a.tabla_afectada_auditoria,
           a.ID_registro_auditoria,
@@ -209,36 +219,76 @@ router.get('/auditoria', async (request, response, next) => {
         LEFT JOIN Persona pe
           ON pe.ID_persona = u.ID_persona_usuario
         WHERE (@table IS NULL OR a.tabla_afectada_auditoria = @table)
-        ORDER BY a.ID_auditoria DESC;
+        ORDER BY a.ID_auditoria DESC
+        OFFSET (@page - 1) * @pageSize ROWS
+        FETCH NEXT @pageSize ROWS ONLY;
+
+        SELECT @total AS total;
       `);
 
-    response.json(result.recordset);
+    const recordsets = Array.isArray(result.recordsets) ? result.recordsets : Object.values(result.recordsets);
+    const items = recordsets[0];
+    const total = recordsets[1]?.[0]?.total ?? 0;
+
+    response.json({
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    });
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/usuarios', async (_request, response, next) => {
+router.get('/usuarios', async (request, response, next) => {
+  const page = Math.max(1, Number(request.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(request.query.pageSize) || 20));
+
   try {
     const pool = await getDatabasePool();
-    const result = await pool.request().query(`
-      SELECT
-        u.ID_usuario,
-        u.email_usuario,
-        u.activo_usuario,
-        u.email_confirmado_usuario,
-        p.nombres_persona,
-        p.apellido_paterno_persona,
-        STRING_AGG(r.nombre_rol, ', ') AS roles
-      FROM Usuario u
-      INNER JOIN Persona p ON p.ID_persona = u.ID_persona_usuario
-      LEFT JOIN UsuarioRol ur ON ur.ID_usuario_usuario_rol = u.ID_usuario
-      LEFT JOIN Rol r ON r.ID_rol = ur.ID_rol_usuario_rol
-      GROUP BY u.ID_usuario, u.email_usuario, u.activo_usuario,
-        u.email_confirmado_usuario, p.nombres_persona, p.apellido_paterno_persona
-      ORDER BY u.ID_usuario DESC;
-    `);
-    response.json(result.recordset);
+    const result = await pool
+      .request()
+      .input('page', sql.Int, page)
+      .input('pageSize', sql.Int, pageSize)
+      .query(`
+        DECLARE @total INT;
+
+        SELECT @total = COUNT(*) FROM Usuario;
+
+        SELECT
+          u.ID_usuario,
+          u.email_usuario,
+          u.activo_usuario,
+          u.email_confirmado_usuario,
+          p.nombres_persona,
+          p.apellido_paterno_persona,
+          STRING_AGG(r.nombre_rol, ', ') AS roles
+        FROM Usuario u
+        INNER JOIN Persona p ON p.ID_persona = u.ID_persona_usuario
+        LEFT JOIN UsuarioRol ur ON ur.ID_usuario_usuario_rol = u.ID_usuario
+        LEFT JOIN Rol r ON r.ID_rol = ur.ID_rol_usuario_rol
+        GROUP BY u.ID_usuario, u.email_usuario, u.activo_usuario,
+          u.email_confirmado_usuario, p.nombres_persona, p.apellido_paterno_persona
+        ORDER BY u.ID_usuario DESC
+        OFFSET (@page - 1) * @pageSize ROWS
+        FETCH NEXT @pageSize ROWS ONLY;
+
+        SELECT @total AS total;
+      `);
+
+    const recordsets = Array.isArray(result.recordsets) ? result.recordsets : Object.values(result.recordsets);
+    const items = recordsets[0];
+    const total = recordsets[1]?.[0]?.total ?? 0;
+
+    response.json({
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    });
   } catch (error) {
     next(error);
   }

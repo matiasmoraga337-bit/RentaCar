@@ -100,6 +100,33 @@ interface AdminUser {
   roles: string | null;
 }
 
+interface PageResult<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+function PaginationControls({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+  return (
+    <div className="pagination">
+      <button className="button button-outline button-small" disabled={page <= 1} onClick={() => onChange(page - 1)}>Anterior</button>
+      <span className="pagination-info">Página {page} de {totalPages}</span>
+      <button className="button button-outline button-small" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>Siguiente</button>
+    </div>
+  );
+}
+
 function badgeClass(value: string) {
   const key = value.toUpperCase();
   if (key.includes('APROBADO') || key.includes('PUBLICADO') || key.includes('COMPLETADA') || key.includes('CONFIRMADA')) return 'state-pill badge-aprobado';
@@ -120,22 +147,26 @@ export function AdminPage() {
   const [report, setReport] = useState<ProviderReport[]>([]);
   const [providerTypes, setProviderTypes] = useState<ProviderTypeReport[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [auditPage, setAuditPage] = useState(1);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditTotalPages, setAuditTotalPages] = useState(1);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const [usersTotalPages, setUsersTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
 
-  const loadAll = async () => {
+  const loadCore = async () => {
     try {
-      const [summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult, auditResult, userResult] = await Promise.all([
+      const [summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult] = await Promise.all([
         apiRequest<SummaryResponse>('/admin/resumen'),
         apiRequest<AdminProvider[]>('/admin/proveedores'),
         apiRequest<AdminVehicle[]>('/admin/vehiculos'),
         apiRequest<AdminReservation[]>('/admin/reservas'),
         apiRequest<ProviderReport[]>('/admin/reportes/proveedores'),
         apiRequest<ProviderTypeReport[]>('/admin/reportes/tipos-proveedor'),
-        apiRequest<AuditEntry[]>('/admin/auditoria'),
-        apiRequest<AdminUser[]>('/admin/usuarios'),
       ]);
       setSummary(summaryResult);
       setProviders(providerResult);
@@ -143,12 +174,32 @@ export function AdminPage() {
       setReservations(reservationResult);
       setReport(reportResult);
       setProviderTypes(typeResult);
-      setAudit(auditResult);
-      setUsers(userResult);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible cargar el panel.');
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  const loadUsers = async (page: number) => {
+    try {
+      const result = await apiRequest<PageResult<AdminUser>>(`/admin/usuarios?page=${page}&pageSize=10`);
+      setUsers(result.items);
+      setUsersTotal(result.total);
+      setUsersTotalPages(result.totalPages);
+      setUsersPage(result.page);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible cargar los usuarios.');
+    }
+  };
+
+  const loadAudit = async (page: number) => {
+    try {
+      const result = await apiRequest<PageResult<AuditEntry>>(`/admin/auditoria?page=${page}&pageSize=10`);
+      setAudit(result.items);
+      setAuditTotal(result.total);
+      setAuditTotalPages(result.totalPages);
+      setAuditPage(result.page);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible cargar la auditoría.');
     }
   };
 
@@ -162,10 +213,8 @@ export function AdminPage() {
       apiRequest<AdminReservation[]>('/admin/reservas'),
       apiRequest<ProviderReport[]>('/admin/reportes/proveedores'),
       apiRequest<ProviderTypeReport[]>('/admin/reportes/tipos-proveedor'),
-      apiRequest<AuditEntry[]>('/admin/auditoria'),
-      apiRequest<AdminUser[]>('/admin/usuarios'),
     ])
-      .then(([summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult, auditResult, userResult]) => {
+      .then(([summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult]) => {
         if (!active) return;
         setSummary(summaryResult);
         setProviders(providerResult);
@@ -173,8 +222,6 @@ export function AdminPage() {
         setReservations(reservationResult);
         setReport(reportResult);
         setProviderTypes(typeResult);
-        setAudit(auditResult);
-        setUsers(userResult);
       })
       .catch((requestError: Error) => {
         if (!active) return;
@@ -184,9 +231,13 @@ export function AdminPage() {
         if (active) setLoading(false);
       });
 
+    void loadUsers(1);
+    void loadAudit(1);
+
     return () => {
       active = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function updateProviderState(providerId: number, estado: string) {
@@ -197,7 +248,7 @@ export function AdminPage() {
         method: 'PATCH',
         body: JSON.stringify({ estado }),
       });
-      await loadAll();
+      await loadCore();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar el proveedor.');
     } finally {
@@ -213,7 +264,7 @@ export function AdminPage() {
         method: 'PATCH',
         body: JSON.stringify({ estado }),
       });
-      await loadAll();
+      await loadCore();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar el vehículo.');
     } finally {
@@ -228,7 +279,7 @@ export function AdminPage() {
         method: 'PATCH',
         body: JSON.stringify({ activo }),
       });
-      await loadAll();
+      await loadUsers(usersPage);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar el usuario.');
     } finally {
@@ -250,7 +301,7 @@ export function AdminPage() {
         method: 'PATCH',
         body: JSON.stringify({ roles: [...roles] }),
       });
-      await loadAll();
+      await loadUsers(usersPage);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar los roles.');
     } finally {
@@ -285,7 +336,7 @@ export function AdminPage() {
       )}
 
       <section className="admin-section">
-        <div className="section-heading"><div><span className="eyebrow">USUARIOS</span><h2>Gestiona acceso y estado</h2></div><span className="catalog-count">{users.length}</span></div>
+        <div className="section-heading"><div><span className="eyebrow">USUARIOS</span><h2>Gestiona acceso y estado</h2></div><span className="catalog-count">{usersTotal}</span></div>
         <div className="table-wrap">
           <table className="admin-table">
             <thead><tr><th>Usuario</th><th>Correo</th><th>Roles</th><th>Confirmación</th><th>Estado</th><th>Acciones</th></tr></thead>
@@ -301,6 +352,7 @@ export function AdminPage() {
             ))}</tbody>
           </table>
         </div>
+        <PaginationControls page={usersPage} totalPages={usersTotalPages} onChange={(page) => { void loadUsers(page); }} />
       </section>
 
       <section className="admin-section">
@@ -506,7 +558,7 @@ export function AdminPage() {
             <span className="eyebrow">AUDITORÍA</span>
             <h2>Cambios de estado registrados por triggers</h2>
           </div>
-          <span className="catalog-count">{audit.length}</span>
+          <span className="catalog-count">{auditTotal}</span>
         </div>
         {audit.length === 0 ? (
           <div className="empty-state compact-empty"><span>✦</span><p>Sin movimientos de auditoría todavía.</p></div>
@@ -542,6 +594,7 @@ export function AdminPage() {
             </table>
           </div>
         )}
+        <PaginationControls page={auditPage} totalPages={auditTotalPages} onChange={(page) => { void loadAudit(page); }} />
       </section>
     </main>
   );

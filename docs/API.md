@@ -21,9 +21,9 @@ Las rutas protegidas usan `Authorization: Bearer <jwt>` y renuevan su sesion aut
 - `GET /vehiculos`: acepta `search`, `priceMax`, `commune`, `region`, `availableFrom`, `availableTo`.
 - `GET /vehiculos/:id`: detalle, sedes habilitadas y configuracion de devolucion.
 - `GET /vehiculos/:id/resenas`: resenas y promedio.
-- `POST /reservas`: crea reserva pendiente.
+- `POST /reservas`: crea reserva pendiente y envia correo al cliente y al administrador del proveedor.
 - `GET /reservas/mis-reservas`: historial del cliente.
-- `PATCH /reservas/:id/cancelar`: cancela y reembolsa pago aprobado.
+- `PATCH /reservas/:id/cancelar`: cancela, reembolsa pago aprobado y envia correo de cancelacion.
 
 ## Pago simulado
 
@@ -50,7 +50,8 @@ Todas las rutas `/admin` requieren rol `ADMIN`.
 - `GET /admin/reservas`
 - `GET /admin/reportes/proveedores`
 - `GET /admin/reportes/tipos-proveedor`
-- `GET /admin/auditoria?tabla=Reserva`
+- `GET /admin/auditoria?tabla=Reserva&page=1&pageSize=10`: lista paginada con `{ items, total, page, pageSize, totalPages }`.
+- `GET /admin/usuarios?page=1&pageSize=10`: lista paginada con el mismo formato.
 
 ## Proveedores
 
