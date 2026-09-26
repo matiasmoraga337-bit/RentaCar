@@ -90,6 +90,67 @@ export async function sendProviderStatusEmail(email: string, name: string, statu
   });
 }
 
+export async function sendReservationCreatedEmail(
+  email: string,
+  name: string,
+  reservationId: number,
+  vehicle: string,
+  inicio: string,
+  fin: string,
+  retiro: string,
+  devolucion: string,
+) {
+  await transporter.sendMail({
+    from: env.smtp.from,
+    to: email,
+    subject: `Reserva #${reservationId} creada - RentaCar`,
+    text: `Hola ${name}, tu reserva #${reservationId} del vehiculo ${vehicle} quedo registrada (${inicio} a ${fin}, retiro en ${retiro} y devolucion en ${devolucion}).`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#173b43">
+        <h1>Reserva creada</h1>
+        <p>Hola ${escapeHtml(name)}, tu reserva <strong>#${reservationId}</strong> quedo registrada y pendiente de pago.</p>
+        <ul>
+          <li>Vehiculo: <strong>${escapeHtml(vehicle)}</strong></li>
+          <li>Retiro: <strong>${escapeHtml(retiro)}</strong> el ${escapeHtml(inicio)}</li>
+          <li>Devolucion: <strong>${escapeHtml(devolucion)}</strong> el ${escapeHtml(fin)}</li>
+        </ul>
+        <p><a href="${env.frontendUrl}/reservas">Ver mis reservas</a> para completar el pago simulado.</p>
+      </div>
+    `,
+  });
+}
+
+export async function sendNewReservationProviderEmail(
+  email: string,
+  providerName: string,
+  reservationId: number,
+  vehicle: string,
+  clientName: string,
+  inicio: string,
+  fin: string,
+  retiro: string,
+) {
+  await transporter.sendMail({
+    from: env.smtp.from,
+    to: email,
+    subject: `Nueva reserva #${reservationId} en tu flota - RentaCar`,
+    text: `Hola ${providerName}, se creo una reserva nueva (#${reservationId}) para ${vehicle}, a nombre de ${clientName}, desde ${inicio} en ${retiro} hasta ${fin}.`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#173b43">
+        <h1>Nueva reserva en tu flota</h1>
+        <p>Hola ${escapeHtml(providerName)}, se registro una nueva reserva:</p>
+        <ul>
+          <li>Reserva: <strong>#${reservationId}</strong></li>
+          <li>Vehiculo: <strong>${escapeHtml(vehicle)}</strong></li>
+          <li>Cliente: <strong>${escapeHtml(clientName)}</strong></li>
+          <li>Retiro: <strong>${escapeHtml(retiro)}</strong> el ${escapeHtml(inicio)}</li>
+          <li>Devolucion estimada: el ${escapeHtml(fin)}</li>
+        </ul>
+      </div>
+    `,
+  });
+}
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (character) => ({
     '&': '&amp;',

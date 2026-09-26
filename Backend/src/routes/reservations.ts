@@ -2,7 +2,11 @@ import { Router } from 'express';
 
 import { getDatabasePool, sql } from '../database/sql.js';
 import { authenticateToken } from '../middlewares/auth.js';
-import { sendReservationCancelledEmail } from '../services/mail.js';
+import {
+  sendNewReservationProviderEmail,
+  sendReservationCancelledEmail,
+  sendReservationCreatedEmail,
+} from '../services/mail.js';
 
 const router = Router();
 
@@ -34,7 +38,64 @@ router.post('/', authenticateToken, async (request, response, next) => {
       .input('observaciones', sql.NVarChar(500), body.observaciones?.trim() || null)
       .execute('sp_CrearReserva');
 
-    response.status(201).json(result.recordset[0]);
+    const created = result.recordset[0];
+
+    if (created) {
+      const recipients = await pool
+        .request()
+        .input('reservationId', sql.Int, created.ID_reserva)
+        .query(`
+          SELECT
+            d.email_usuario AS cliente_email,
+            d.nombre_cliente,
+            CONCAT(d.nombre_marca, ' ', d.nombre_modelo, ' (', d.patente_vehiculo, ')') AS vehiculo,
+            CONVERT(NVARCHAR(10), d.fecha_inicio_reserva, 120) AS inicio,
+            CONVERT(NVARCHAR(10), d.fecha_fin_reserva, 120) AS fin,
+            d.sede_retiro,
+            d.sede_devolucion,
+            pu.email_usuario AS proveedor_email,
+            pu.nombre_contacto
+          FROM vw_ReservasDetalle d
+          INNER JOIN Proveedor pr ON pr.ID_proveedor = d.ID_proveedor
+          LEFT JOIN (
+            SELECT u.email_usuario, CONCAT(pe.nombres_persona, ' ', pe.apellido_paterno_persona) AS nombre_contacto, pu2.ID_proveedor_proveedor_usuario
+            FROM ProveedorUsuario pu2
+            INNER JOIN Usuario u ON u.ID_usuario = pu2.ID_usuario_proveedor_usuario
+            INNER JOIN Persona pe ON pe.ID_persona = u.ID_persona_usuario
+            WHERE pu2.es_administrador_proveedor_usuario = 1
+          ) pu ON pu.ID_proveedor_proveedor_usuario = pr.ID_proveedor
+          WHERE d.ID_reserva = @reservationId;
+        `);
+      const recipient = recipients.recordset[0];
+
+      if (recipient?.cliente_email) {
+        sendReservationCreatedEmail(
+          recipient.cliente_email,
+          recipient.nombre_cliente ?? 'cliente',
+          created.ID_reserva,
+          recipient.vehiculo ?? '',
+          recipient.inicio ?? '',
+          recipient.fin ?? '',
+          recipient.sede_retiro ?? '',
+          recipient.sede_devolucion ?? '',
+        ).catch((error: unknown) => console.error('No fue posible enviar el correo de reserva creada.', error));
+      }
+
+      if (recipient?.proveedor_email) {
+        sendNewReservationProviderEmail(
+          recipient.proveedor_email,
+          recipient.nombre_contacto ?? 'proveedor',
+          created.ID_reserva,
+          recipient.vehiculo ?? '',
+          recipient.nombre_cliente ?? '',
+          recipient.inicio ?? '',
+          recipient.fin ?? '',
+          recipient.sede_retiro ?? '',
+        ).catch((error: unknown) => console.error('No fue posible notificar al proveedor por correo.', error));
+      }
+    }
+
+    response.status(201).json(created);
   } catch (error) {
     const sqlError = error as { number?: number };
     const badRequestErrors = [51004, 51005, 51006, 51007, 51008, 51009, 51010, 51011, 51012];
