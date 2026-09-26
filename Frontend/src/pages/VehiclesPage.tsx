@@ -23,6 +23,10 @@ export function VehiclesPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [search, setSearch] = useState('');
   const [priceMax, setPriceMax] = useState('');
+  const [commune, setCommune] = useState('');
+  const [region, setRegion] = useState('');
+  const [availableFrom, setAvailableFrom] = useState('');
+  const [availableTo, setAvailableTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -32,6 +36,10 @@ export function VehiclesPage() {
 
     if (search.trim()) params.set('search', search.trim());
     if (priceMax) params.set('priceMax', priceMax);
+    if (commune.trim()) params.set('commune', commune.trim());
+    if (region.trim()) params.set('region', region.trim());
+    if (availableFrom) params.set('availableFrom', availableFrom);
+    if (availableTo) params.set('availableTo', availableTo);
 
     apiRequest<VehicleResponse>(`/vehiculos?${params.toString()}`, {
       signal: controller.signal,
@@ -45,7 +53,7 @@ export function VehiclesPage() {
       .finally(() => setLoading(false));
 
     return () => controller.abort();
-  }, [search, priceMax]);
+  }, [search, priceMax, commune, region, availableFrom, availableTo]);
 
   return (
     <main className="catalog-page">
@@ -76,6 +84,22 @@ export function VehiclesPage() {
             onChange={(event) => setPriceMax(event.target.value)}
             placeholder="Ej. 50000"
           />
+        </label>
+        <label>
+          Comuna exacta
+          <input value={commune} onChange={(event) => setCommune(event.target.value)} placeholder="Ej. Santiago" />
+        </label>
+        <label>
+          Región exacta
+          <input value={region} onChange={(event) => setRegion(event.target.value)} placeholder="Ej. Region Metropolitana" />
+        </label>
+        <label>
+          Disponible desde
+          <input type="date" value={availableFrom} onChange={(event) => setAvailableFrom(event.target.value)} />
+        </label>
+        <label>
+          Disponible hasta
+          <input type="date" value={availableTo} onChange={(event) => setAvailableTo(event.target.value)} />
         </label>
       </section>
 

@@ -8,13 +8,33 @@ const router = Router();
 interface VehicleFilters {
   search?: string;
   priceMax?: string;
+  commune?: string;
+  region?: string;
+  availableFrom?: string;
+  availableTo?: string;
 }
 
 router.get('/', async (request, response, next) => {
   const filters = request.query as VehicleFilters;
   const search = filters.search?.trim() || null;
+  const commune = filters.commune?.trim() || null;
+  const region = filters.region?.trim() || null;
   const parsedPrice = filters.priceMax ? Number(filters.priceMax) : null;
   const priceMax = parsedPrice && parsedPrice > 0 ? parsedPrice : null;
+  const hasOneAvailabilityDate = Boolean(filters.availableFrom) !== Boolean(filters.availableTo);
+
+  if (hasOneAvailabilityDate) {
+    response.status(400).json({ message: 'Debes indicar fecha de inicio y fecha de termino.' });
+    return;
+  }
+
+  const availableFrom = filters.availableFrom || null;
+  const availableTo = filters.availableTo || null;
+
+  if (availableFrom && availableTo && availableTo <= availableFrom) {
+    response.status(400).json({ message: 'La fecha de termino debe ser posterior a la fecha de inicio.' });
+    return;
+  }
 
   try {
     const pool = await getDatabasePool();
@@ -22,6 +42,10 @@ router.get('/', async (request, response, next) => {
       .request()
       .input('search', sql.NVarChar(150), search)
       .input('priceMax', sql.Decimal(12, 2), priceMax)
+      .input('commune', sql.NVarChar(100), commune)
+      .input('region', sql.NVarChar(100), region)
+      .input('availableFrom', sql.Date, availableFrom)
+      .input('availableTo', sql.Date, availableTo)
       .query(`
         SELECT
           ID_vehiculo,
@@ -51,6 +75,21 @@ router.get('/', async (request, response, next) => {
           OR nombre_comuna LIKE '%' + @search + '%'
         )
         AND (@priceMax IS NULL OR precio_diario_base_vehiculo <= @priceMax)
+        AND (@commune IS NULL OR nombre_comuna = @commune)
+        AND (@region IS NULL OR nombre_region = @region)
+        AND (
+          @availableFrom IS NULL
+          OR NOT EXISTS (
+            SELECT 1
+            FROM Reserva r
+            INNER JOIN EstadoReserva er
+              ON er.ID_estado_reserva = r.ID_estado_reserva_reserva
+            WHERE r.ID_vehiculo_reserva = ID_vehiculo
+              AND er.nombre_estado_reserva IN ('PENDIENTE', 'CONFIRMADA')
+              AND @availableFrom < r.fecha_fin_reserva
+              AND @availableTo > r.fecha_inicio_reserva
+          )
+        )
         ORDER BY nombre_marca, nombre_modelo, precio_diario_base_vehiculo;
       `);
 
