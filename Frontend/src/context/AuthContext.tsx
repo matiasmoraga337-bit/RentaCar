@@ -33,6 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const token = sessionStorage.getItem(tokenKey);
 
     if (!token) {
+      setLoading(false);
       return;
     }
 
@@ -99,8 +100,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   }
 
+  async function refreshProfile() {
+    const token = sessionStorage.getItem(tokenKey);
+    if (!token) return;
+    const result = await apiRequest<ProfileResponse>('/auth/perfil', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    setProfile(result.user);
+    setUser({
+      id: result.user.ID_usuario,
+      email: result.user.email_usuario,
+      roles: result.roles,
+    });
+  }
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, profile, loading, login, register, logout, refreshProfile }}>
       {children}
     </AuthContext.Provider>
   );
