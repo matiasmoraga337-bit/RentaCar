@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { getDatabasePool, sql } from '../database/sql.js';
 import { authenticateToken } from '../middlewares/auth.js';
+import { sendReservationCancelledEmail } from '../services/mail.js';
 
 const router = Router();
 
@@ -125,11 +126,37 @@ router.patch('/:id/cancelar', authenticateToken, async (request, response, next)
 
   try {
     const pool = await getDatabasePool();
+    const owner = await pool
+      .request()
+      .input('reservationId', sql.Int, id)
+      .input('userId', sql.Int, request.user!.id)
+      .query(`
+        SELECT u.email_usuario, p.nombres_persona
+        FROM Reserva r
+        INNER JOIN Usuario u ON u.ID_usuario = r.ID_usuario_cliente_reserva
+        INNER JOIN Persona p ON p.ID_persona = u.ID_persona_usuario
+        WHERE r.ID_reserva = @reservationId
+          AND r.ID_usuario_cliente_reserva = @userId;
+      `);
+
+    if (owner.recordset.length === 0) {
+      response.status(404).json({ message: 'Reserva no encontrada.' });
+      return;
+    }
+
     const result = await pool
       .request()
       .input('ID_reserva', sql.Int, id)
       .input('ID_usuario', sql.Int, request.user!.id)
       .execute('sp_CancelarReserva');
+
+    const paymentWasRefunded = result.recordset[0]?.nombre_estado_pago === 'REEMBOLSADO';
+    sendReservationCancelledEmail(
+      owner.recordset[0].email_usuario,
+      owner.recordset[0].nombres_persona,
+      id,
+      paymentWasRefunded,
+    ).catch((error: unknown) => console.error('No fue posible enviar el correo de cancelacion.', error));
 
     response.json(result.recordset[0]);
   } catch (error) {

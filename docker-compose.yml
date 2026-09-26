@@ -12,5 +12,13 @@ services:
       - rentacar_sql_data:/var/opt/mssql
     restart: unless-stopped
 
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: rentacar-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
 volumes:
   rentacar_sql_data:

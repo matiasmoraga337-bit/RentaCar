@@ -34,6 +34,8 @@ export function ProfilePage() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
 
   function loadReservations() {
     apiRequest<MyReservation[]>('/reservas/mis-reservas')
@@ -77,6 +79,23 @@ export function ProfilePage() {
     }
   }
 
+  async function handleProfileUpdate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    setProfileMessage('');
+    try {
+      await apiRequest('/auth/perfil', {
+        method: 'PATCH',
+        body: JSON.stringify(values),
+      });
+      setProfileMessage('Perfil actualizado.');
+      setEditingProfile(false);
+      window.location.reload();
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : 'No fue posible actualizar el perfil.');
+    }
+  }
+
   const canCancel = (reservation: MyReservation) =>
     reservation.nombre_estado_reserva === 'PENDIENTE' || reservation.nombre_estado_reserva === 'CONFIRMADA';
 
@@ -109,6 +128,23 @@ export function ProfilePage() {
           <strong>{reservations.length}</strong>
           <p>Historial registrado en tu cuenta</p>
         </article>
+      </section>
+
+      <section className="profile-edit-section">
+        <div className="section-heading">
+          <div><span className="eyebrow">DATOS PERSONALES</span><h2>Tu información</h2></div>
+          <button className="button button-outline button-small" onClick={() => setEditingProfile((current) => !current)}>{editingProfile ? 'Cerrar' : 'Editar'}</button>
+        </div>
+        {profileMessage && <p className="success-message" role="status">{profileMessage}</p>}
+        {editingProfile && profile && (
+          <form className="profile-edit-form" onSubmit={handleProfileUpdate}>
+            <label>Nombres<input name="nombres" defaultValue={profile.nombres_persona} required /></label>
+            <label>Apellido paterno<input name="apellidoPaterno" defaultValue={profile.apellido_paterno_persona} required /></label>
+            <label>Apellido materno<input name="apellidoMaterno" defaultValue={profile.apellido_materno_persona ?? ''} /></label>
+            <label>Teléfono<input name="telefono" defaultValue={profile.telefono_persona ?? ''} /></label>
+            <button className="button button-primary" type="submit">Guardar cambios</button>
+          </form>
+        )}
       </section>
 
       <section className="reservations-section">

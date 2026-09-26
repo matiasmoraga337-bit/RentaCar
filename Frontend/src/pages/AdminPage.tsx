@@ -90,6 +90,16 @@ interface AuditEntry {
   email_usuario: string | null;
 }
 
+interface AdminUser {
+  ID_usuario: number;
+  email_usuario: string;
+  activo_usuario: boolean;
+  email_confirmado_usuario: boolean;
+  nombres_persona: string;
+  apellido_paterno_persona: string;
+  roles: string | null;
+}
+
 function badgeClass(value: string) {
   const key = value.toUpperCase();
   if (key.includes('APROBADO') || key.includes('PUBLICADO') || key.includes('COMPLETADA') || key.includes('CONFIRMADA')) return 'state-pill badge-aprobado';
@@ -110,13 +120,14 @@ export function AdminPage() {
   const [report, setReport] = useState<ProviderReport[]>([]);
   const [providerTypes, setProviderTypes] = useState<ProviderTypeReport[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
 
   const loadAll = async () => {
     try {
-      const [summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult, auditResult] = await Promise.all([
+      const [summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult, auditResult, userResult] = await Promise.all([
         apiRequest<SummaryResponse>('/admin/resumen'),
         apiRequest<AdminProvider[]>('/admin/proveedores'),
         apiRequest<AdminVehicle[]>('/admin/vehiculos'),
@@ -124,6 +135,7 @@ export function AdminPage() {
         apiRequest<ProviderReport[]>('/admin/reportes/proveedores'),
         apiRequest<ProviderTypeReport[]>('/admin/reportes/tipos-proveedor'),
         apiRequest<AuditEntry[]>('/admin/auditoria'),
+        apiRequest<AdminUser[]>('/admin/usuarios'),
       ]);
       setSummary(summaryResult);
       setProviders(providerResult);
@@ -132,6 +144,7 @@ export function AdminPage() {
       setReport(reportResult);
       setProviderTypes(typeResult);
       setAudit(auditResult);
+      setUsers(userResult);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible cargar el panel.');
     } finally {
@@ -150,8 +163,9 @@ export function AdminPage() {
       apiRequest<ProviderReport[]>('/admin/reportes/proveedores'),
       apiRequest<ProviderTypeReport[]>('/admin/reportes/tipos-proveedor'),
       apiRequest<AuditEntry[]>('/admin/auditoria'),
+      apiRequest<AdminUser[]>('/admin/usuarios'),
     ])
-      .then(([summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult, auditResult]) => {
+      .then(([summaryResult, providerResult, vehicleResult, reservationResult, reportResult, typeResult, auditResult, userResult]) => {
         if (!active) return;
         setSummary(summaryResult);
         setProviders(providerResult);
@@ -160,6 +174,7 @@ export function AdminPage() {
         setReport(reportResult);
         setProviderTypes(typeResult);
         setAudit(auditResult);
+        setUsers(userResult);
       })
       .catch((requestError: Error) => {
         if (!active) return;
@@ -206,6 +221,43 @@ export function AdminPage() {
     }
   }
 
+  async function updateUserState(userId: number, activo: boolean) {
+    setBusyId(`u-${userId}`);
+    try {
+      await apiRequest(`/admin/usuarios/${userId}/estado`, {
+        method: 'PATCH',
+        body: JSON.stringify({ activo }),
+      });
+      await loadAll();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar el usuario.');
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function updateUserRoles(userId: number, currentRoles: string | null, role: string) {
+    const roles = new Set((currentRoles ?? '').split(',').map((value) => value.trim()).filter(Boolean));
+    if (roles.has(role)) roles.delete(role);
+    else roles.add(role);
+    if (roles.size === 0) {
+      setError('El usuario debe conservar al menos un rol.');
+      return;
+    }
+    setBusyId(`r-${userId}`);
+    try {
+      await apiRequest(`/admin/usuarios/${userId}/roles`, {
+        method: 'PATCH',
+        body: JSON.stringify({ roles: [...roles] }),
+      });
+      await loadAll();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar los roles.');
+    } finally {
+      setBusyId('');
+    }
+  }
+
   if (loading) return <main className="admin-page"><div className="loading-inline">Cargando panel de administración...</div></main>;
 
   const totals = summary?.totals;
@@ -231,6 +283,25 @@ export function AdminPage() {
           <article className="kpi-card kpi-card-accent"><span className="profile-label">INGRESOS SIMULADOS</span><strong>${Number(totals.ingresos_simulados).toLocaleString('es-CL')}</strong></article>
         </section>
       )}
+
+      <section className="admin-section">
+        <div className="section-heading"><div><span className="eyebrow">USUARIOS</span><h2>Gestiona acceso y estado</h2></div><span className="catalog-count">{users.length}</span></div>
+        <div className="table-wrap">
+          <table className="admin-table">
+            <thead><tr><th>Usuario</th><th>Correo</th><th>Roles</th><th>Confirmación</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody>{users.map((user) => (
+              <tr key={user.ID_usuario}>
+                <td><strong>{user.nombres_persona} {user.apellido_paterno_persona}</strong></td>
+                <td>{user.email_usuario}</td>
+                <td><div className="admin-actions">{['CLIENTE', 'PROVEEDOR', 'ADMIN'].map((role) => <button key={role} className={user.roles?.includes(role) ? 'button button-primary button-small' : 'button button-outline button-small'} disabled={busyId === `r-${user.ID_usuario}`} onClick={() => updateUserRoles(user.ID_usuario, user.roles, role)}>{role}</button>)}</div></td>
+                <td><span className={user.email_confirmado_usuario ? 'state-pill badge-aprobado' : 'state-pill badge-pendiente'}>{user.email_confirmado_usuario ? 'Confirmado' : 'Pendiente'}</span></td>
+                <td><span className={user.activo_usuario ? 'state-pill badge-aprobado' : 'state-pill badge-rechazado'}>{user.activo_usuario ? 'Activo' : 'Inactivo'}</span></td>
+                <td><button className="button button-outline button-small" disabled={busyId === `u-${user.ID_usuario}`} onClick={() => updateUserState(user.ID_usuario, !user.activo_usuario)}>{user.activo_usuario ? 'Desactivar' : 'Activar'}</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </section>
 
       <section className="admin-section">
         <div className="section-heading">

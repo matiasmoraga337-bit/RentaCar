@@ -6,15 +6,18 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "test:e2e:local": "node scripts/e2e-local.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
+    "express-rate-limit": "^8.7.0",
     "jsonwebtoken": "^9.0.2",
-    "mssql": "^11.0.1"
+    "mssql": "^11.0.1",
+    "nodemailer": "^10.0.10"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -23,6 +26,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/mssql": "^12.3.0",
     "@types/node": "^22.10.7",
+    "@types/nodemailer": "^8.0.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"
   }

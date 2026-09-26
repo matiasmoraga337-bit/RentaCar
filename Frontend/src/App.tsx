@@ -2,10 +2,13 @@ import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom';
 
 import { useAuth } from './context/useAuth';
 import { AdminPage } from './pages/AdminPage';
+import { ConfirmAccountPage } from './pages/ConfirmAccountPage';
 import { HomePage } from './pages/HomePage';
 import { LoginPage } from './pages/LoginPage';
 import { OperationsPage } from './pages/OperationsPage';
 import { ProfilePage } from './pages/ProfilePage';
+import { PasswordRecoveryPage } from './pages/PasswordRecoveryPage';
+import { SimulatedPaymentPage } from './pages/SimulatedPaymentPage';
 import { ProviderPage } from './pages/ProviderPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { VehiclesPage } from './pages/VehiclesPage';
@@ -76,6 +79,9 @@ function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/registro" element={<RegisterPage />} />
+        <Route path="/confirmar-cuenta" element={<ConfirmAccountPage />} />
+        <Route path="/recuperar" element={<PasswordRecoveryPage />} />
+        <Route path="/pago/simulado" element={<ProtectedRoute><SimulatedPaymentPage /></ProtectedRoute>} />
         <Route path="/vehiculos" element={<VehiclesPage />} />
         <Route path="/vehiculos/:id" element={<VehicleDetailPage />} />
         <Route path="/perfil" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />

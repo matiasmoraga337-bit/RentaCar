@@ -86,6 +86,7 @@ CREATE TABLE Usuario
     email_usuario VARCHAR(150) NOT NULL,
     password_hash_usuario VARCHAR(255) NOT NULL,
     activo_usuario BIT NOT NULL CONSTRAINT DF_usuario_activo DEFAULT 1,
+    email_confirmado_usuario BIT NOT NULL CONSTRAINT DF_usuario_email_confirmado DEFAULT 0,
     fecha_creacion_usuario DATETIME2(0) NOT NULL
         CONSTRAINT DF_usuario_fecha DEFAULT SYSDATETIME(),
 
@@ -94,6 +95,38 @@ CREATE TABLE Usuario
         FOREIGN KEY (ID_persona_usuario) REFERENCES Persona(ID_persona),
     CONSTRAINT UQ_usuario_persona UNIQUE (ID_persona_usuario),
     CONSTRAINT UQ_usuario_email UNIQUE (email_usuario)
+);
+GO
+
+CREATE TABLE EmailVerificacion
+(
+    ID_email_verificacion BIGINT IDENTITY(1,1) NOT NULL,
+    ID_usuario_email_verificacion INT NOT NULL,
+    token_hash_email_verificacion CHAR(64) NOT NULL,
+    fecha_expiracion_email_verificacion DATETIME2(0) NOT NULL,
+    fecha_uso_email_verificacion DATETIME2(0) NULL,
+    fecha_creacion_email_verificacion DATETIME2(0) NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_email_verificacion PRIMARY KEY (ID_email_verificacion),
+    CONSTRAINT UQ_email_verificacion_token UNIQUE (token_hash_email_verificacion),
+    CONSTRAINT FK_email_verificacion_usuario
+        FOREIGN KEY (ID_usuario_email_verificacion) REFERENCES Usuario(ID_usuario)
+);
+GO
+
+CREATE TABLE PasswordResetToken
+(
+    ID_password_reset BIGINT IDENTITY(1,1) NOT NULL,
+    ID_usuario_password_reset INT NOT NULL,
+    token_hash_password_reset CHAR(64) NOT NULL,
+    fecha_expiracion_password_reset DATETIME2(0) NOT NULL,
+    fecha_uso_password_reset DATETIME2(0) NULL,
+    fecha_creacion_password_reset DATETIME2(0) NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_password_reset PRIMARY KEY (ID_password_reset),
+    CONSTRAINT UQ_password_reset_token UNIQUE (token_hash_password_reset),
+    CONSTRAINT FK_password_reset_usuario
+        FOREIGN KEY (ID_usuario_password_reset) REFERENCES Usuario(ID_usuario)
 );
 GO
 
@@ -643,6 +676,30 @@ CREATE TABLE Pago
 );
 GO
 
+CREATE TABLE PagoTransaccionSimulada
+(
+    ID_transaccion_simulada BIGINT IDENTITY(1,1) NOT NULL,
+    ID_reserva_transaccion_simulada INT NOT NULL,
+    buy_order_transaccion_simulada VARCHAR(100) NOT NULL,
+    session_id_transaccion_simulada VARCHAR(100) NOT NULL,
+    token_ws_transaccion_simulada CHAR(64) NOT NULL,
+    monto_transaccion_simulada DECIMAL(12,2) NOT NULL,
+    estado_transaccion_simulada VARCHAR(20) NOT NULL DEFAULT 'CREADA',
+    fecha_creacion_transaccion_simulada DATETIME2(0) NOT NULL DEFAULT SYSDATETIME(),
+    fecha_respuesta_transaccion_simulada DATETIME2(0) NULL,
+
+    CONSTRAINT PK_pago_transaccion_simulada PRIMARY KEY (ID_transaccion_simulada),
+    CONSTRAINT UQ_pago_transaccion_buy_order UNIQUE (buy_order_transaccion_simulada),
+    CONSTRAINT UQ_pago_transaccion_session UNIQUE (session_id_transaccion_simulada),
+    CONSTRAINT UQ_pago_transaccion_token UNIQUE (token_ws_transaccion_simulada),
+    CONSTRAINT FK_pago_transaccion_reserva
+        FOREIGN KEY (ID_reserva_transaccion_simulada) REFERENCES Reserva(ID_reserva),
+    CONSTRAINT CK_pago_transaccion_estado
+        CHECK (estado_transaccion_simulada IN ('CREADA', 'APROBADA', 'RECHAZADA', 'ABORTADA', 'REEMBOLSADA')),
+    CONSTRAINT CK_pago_transaccion_monto CHECK (monto_transaccion_simulada > 0)
+);
+GO
+
 CREATE TABLE Resena
 (
     ID_resena INT IDENTITY(1,1) NOT NULL,
@@ -911,7 +968,7 @@ GO
    11. TRIGGERS DE AUDITORIA
    ================================================================ */
 
-CREATE TRIGGER trg_auditoria_reserva_estado
+CREATE OR ALTER TRIGGER trg_auditoria_reserva_estado
 ON Reserva
 AFTER UPDATE
 AS
@@ -924,7 +981,8 @@ BEGIN
         (
             tabla_afectada_auditoria,
             ID_registro_auditoria,
-            accion_auditoria,
+             accion_auditoria,
+             ID_usuario_auditoria,
             valor_anterior_auditoria,
             valor_nuevo_auditoria,
             descripcion_auditoria
@@ -933,6 +991,7 @@ BEGIN
             'Reserva',
             i.ID_reserva,
             'CAMBIO_ESTADO',
+            TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id')),
             ea.nombre_estado_reserva,
             en.nombre_estado_reserva,
             'Cambio automatico de estado de reserva'
@@ -949,7 +1008,7 @@ BEGIN
 END;
 GO
 
-CREATE TRIGGER trg_auditoria_proveedor_estado
+CREATE OR ALTER TRIGGER trg_auditoria_proveedor_estado
 ON Proveedor
 AFTER UPDATE
 AS
@@ -962,7 +1021,8 @@ BEGIN
         (
             tabla_afectada_auditoria,
             ID_registro_auditoria,
-            accion_auditoria,
+             accion_auditoria,
+             ID_usuario_auditoria,
             valor_anterior_auditoria,
             valor_nuevo_auditoria,
             descripcion_auditoria
@@ -971,6 +1031,7 @@ BEGIN
             'Proveedor',
             i.ID_proveedor,
             'CAMBIO_ESTADO',
+            TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id')),
             ea.nombre_estado_proveedor,
             en.nombre_estado_proveedor,
             'Cambio de estado del proveedor'
@@ -1208,6 +1269,7 @@ BEGIN
     BEGIN TRY
         SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;
         BEGIN TRANSACTION;
+        EXEC sys.sp_set_session_context @key = N'usuario_id', @value = @ID_usuario_cliente;
 
         IF @fecha_fin <= @fecha_inicio
             THROW 51004, 'La fecha de devolucion debe ser posterior al retiro.', 1;
@@ -1357,7 +1419,7 @@ GO
    14. PROCEDIMIENTO: REGISTRAR PAGO
    ================================================================ */
 
-CREATE PROCEDURE sp_RegistrarPago
+CREATE OR ALTER PROCEDURE sp_RegistrarPago
     @ID_reserva INT,
     @ID_metodo_pago INT,
     @monto_pago DECIMAL(12,2),
@@ -1376,7 +1438,6 @@ BEGIN
 
     BEGIN TRY
         BEGIN TRANSACTION;
-
         IF NOT EXISTS
         (
             SELECT 1
@@ -1390,6 +1451,10 @@ BEGIN
         INNER JOIN EstadoReserva er
             ON er.ID_estado_reserva = r.ID_estado_reserva_reserva
         WHERE r.ID_reserva = @ID_reserva;
+
+        DECLARE @auditUser INT;
+        SELECT @auditUser = ID_usuario_cliente_reserva FROM Reserva WHERE ID_reserva = @ID_reserva;
+        EXEC sys.sp_set_session_context @key = N'usuario_id', @value = @auditUser;
 
         IF @nombre_estado_reserva <> 'PENDIENTE'
             THROW 52002, 'La reserva no esta pendiente de pago.', 1;
@@ -1794,6 +1859,7 @@ BEGIN
 
     BEGIN TRY
         BEGIN TRANSACTION;
+        EXEC sys.sp_set_session_context @key = N'usuario_id', @value = @ID_usuario;
 
         SELECT
             @ownerId = r.ID_usuario_cliente_reserva,
@@ -1840,6 +1906,13 @@ BEGIN
             ON ep.ID_estado_pago = p.ID_estado_pago_pago
         WHERE p.ID_reserva_pago = @ID_reserva
           AND ep.nombre_estado_pago IN ('PENDIENTE', 'APROBADO');
+
+        UPDATE t
+        SET estado_transaccion_simulada = 'REEMBOLSADA',
+            fecha_respuesta_transaccion_simulada = SYSDATETIME()
+        FROM PagoTransaccionSimulada t
+        WHERE t.ID_reserva_transaccion_simulada = @ID_reserva
+          AND t.estado_transaccion_simulada = 'APROBADA';
 
         COMMIT TRANSACTION;
 
