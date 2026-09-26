@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 import { useAuth } from '../context/useAuth';
 
 export function RegisterPage() {
-  const navigate = useNavigate();
   const { register } = useAuth();
   const [form, setForm] = useState({
     rut: '',
@@ -16,6 +15,7 @@ export function RegisterPage() {
     telefono: '',
   });
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   function updateField(field: keyof typeof form, value: string) {
@@ -25,11 +25,11 @@ export function RegisterPage() {
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+    setMessage('');
     setSubmitting(true);
 
     try {
-      await register(form);
-      navigate('/perfil');
+      setMessage(await register(form));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible crear la cuenta.');
     } finally {
@@ -76,6 +76,7 @@ export function RegisterPage() {
             <small>Usa al menos 8 caracteres.</small>
           </label>
           {error && <p className="form-error" role="alert">{error}</p>}
+          {message && <p className="success-message" role="status">{message}</p>}
           <button className="button button-primary button-full" disabled={submitting}>
             {submitting ? 'Creando cuenta...' : 'Crear cuenta'}
           </button>

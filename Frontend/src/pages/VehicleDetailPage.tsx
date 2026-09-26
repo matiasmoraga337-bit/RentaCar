@@ -103,18 +103,12 @@ export function VehicleDetailPage() {
         }),
       });
 
-      await apiRequest(`/reservas/${reservation.ID_reserva}/pagos`, {
+      const payment = await apiRequest<{ redirectUrl: string }>(`/pagos/simulados/iniciar`, {
         method: 'POST',
-        body: JSON.stringify({
-          idMetodoPago: 1,
-          montoPago: days * Number(detail.vehicle.precio_diario_base_vehiculo),
-          aprobado: true,
-          referencia: `SIM-${reservation.ID_reserva}`,
-        }),
+        body: JSON.stringify({ reservationId: reservation.ID_reserva }),
       });
 
-      setMessage('Reserva confirmada y pago simulado aprobado.');
-      setTimeout(() => navigate('/perfil'), 900);
+      navigate(payment.redirectUrl);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible crear la reserva.');
     } finally {

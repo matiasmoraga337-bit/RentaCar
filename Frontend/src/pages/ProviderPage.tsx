@@ -42,6 +42,16 @@ interface ProviderConfig {
   radio_maximo_km: number | null;
 }
 
+interface ProviderReport {
+  nombre_comercial_proveedor: string;
+  total_vehiculos: number;
+  vehiculos_publicados: number;
+  total_reservas: number;
+  arriendos_activos: number;
+  ingresos_aprobados: number;
+  promedio_resenas: number | null;
+}
+
 function fetchProviders() {
   return apiRequest<Provider[]>('/proveedores/me');
 }
@@ -52,6 +62,7 @@ export function ProviderPage() {
   const [catalogs, setCatalogs] = useState<Catalogs | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [vehicles, setVehicles] = useState<ProviderVehicle[]>([]);
+  const [providerReport, setProviderReport] = useState<ProviderReport | null>(null);
   const [expandedVehicle, setExpandedVehicle] = useState<number | null>(null);
   const [providerConfig, setProviderConfig] = useState<ProviderConfig>({
     permite_devolucion_otra_sede: false,
@@ -106,12 +117,14 @@ export function ProviderPage() {
       apiRequest<ProviderVehicle[]>(`/proveedores/${selectedProvider}/vehiculos`),
       apiRequest<Catalogs>('/catalogos/vehiculos'),
       apiRequest<ProviderConfig>(`/proveedores/${selectedProvider}/configuracion`),
+      apiRequest<ProviderReport>(`/proveedores/${selectedProvider}/reporte`),
     ])
-      .then(([branchResult, vehicleResult, catalogResult, configResult]) => {
+      .then(([branchResult, vehicleResult, catalogResult, configResult, reportResult]) => {
         setBranches(branchResult);
         setVehicles(vehicleResult);
         setCatalogs(catalogResult);
         setProviderConfig(configResult);
+        setProviderReport(reportResult);
         setExpandedVehicle(null);
       })
       .catch((requestError: Error) => setError(requestError.message));
@@ -346,6 +359,18 @@ export function ProviderPage() {
         {selectedProvider && catalogs && (
           <div className="fleet-layout">
             <div className="fleet-forms">
+              {providerReport && <section className="provider-report-card">
+                <span className="eyebrow">REPORTE DE FLOTA</span>
+                <h3>{providerReport.nombre_comercial_proveedor}</h3>
+                <div className="provider-report-grid">
+                  <div><strong>{providerReport.total_vehiculos}</strong><span>Vehículos</span></div>
+                  <div><strong>{providerReport.vehiculos_publicados}</strong><span>Publicados</span></div>
+                  <div><strong>{providerReport.total_reservas}</strong><span>Reservas</span></div>
+                  <div><strong>{providerReport.arriendos_activos}</strong><span>Activos</span></div>
+                  <div><strong>${Number(providerReport.ingresos_aprobados).toLocaleString('es-CL')}</strong><span>Ingresos</span></div>
+                  <div><strong>{providerReport.promedio_resenas ?? '—'}</strong><span>Reseña promedio</span></div>
+                </div>
+              </section>}
               <form className="branch-form" onSubmit={handleBranchSubmit}>
                 <h3>Nueva sede</h3>
                 <label>

@@ -7,7 +7,8 @@
     "dev:frontend": "npm --prefix Frontend run dev",
     "dev:backend": "npm --prefix Backend run dev",
     "build:frontend": "npm --prefix Frontend run build",
-    "build:backend": "npm --prefix Backend run build"
+    "build:backend": "npm --prefix Backend run build",
+    "test:e2e:local": "npm --prefix Backend run test:e2e:local"
   },
   "engines": {
     "node": ">=22 <25",

@@ -69,11 +69,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function register(payload: RegisterPayload) {
-    const result = await apiRequest<AuthResponse>('/auth/registro', {
+    const result = await apiRequest<{ message: string }>('/auth/registro', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
-    await saveAuth(result);
+    return result.message;
   }
 
   function logout() {

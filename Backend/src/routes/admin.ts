@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { getDatabasePool, sql } from '../database/sql.js';
 import { authenticateToken, requireRoles } from '../middlewares/auth.js';
+import { sendProviderStatusEmail } from '../services/mail.js';
 
 const router = Router();
 
@@ -217,6 +218,89 @@ router.get('/auditoria', async (request, response, next) => {
   }
 });
 
+router.get('/usuarios', async (_request, response, next) => {
+  try {
+    const pool = await getDatabasePool();
+    const result = await pool.request().query(`
+      SELECT
+        u.ID_usuario,
+        u.email_usuario,
+        u.activo_usuario,
+        u.email_confirmado_usuario,
+        p.nombres_persona,
+        p.apellido_paterno_persona,
+        STRING_AGG(r.nombre_rol, ', ') AS roles
+      FROM Usuario u
+      INNER JOIN Persona p ON p.ID_persona = u.ID_persona_usuario
+      LEFT JOIN UsuarioRol ur ON ur.ID_usuario_usuario_rol = u.ID_usuario
+      LEFT JOIN Rol r ON r.ID_rol = ur.ID_rol_usuario_rol
+      GROUP BY u.ID_usuario, u.email_usuario, u.activo_usuario,
+        u.email_confirmado_usuario, p.nombres_persona, p.apellido_paterno_persona
+      ORDER BY u.ID_usuario DESC;
+    `);
+    response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/usuarios/:id/estado', async (request, response, next) => {
+  const userId = parseId(request.params.id);
+  const active = request.body?.activo;
+  if (!userId || typeof active !== 'boolean') {
+    response.status(400).json({ message: 'Usuario o estado invalido.' });
+    return;
+  }
+  if (userId === request.user!.id && !active) {
+    response.status(400).json({ message: 'No puedes desactivar tu propia cuenta.' });
+    return;
+  }
+  try {
+    const pool = await getDatabasePool();
+    const result = await pool.request()
+      .input('userId', sql.Int, userId)
+      .input('active', sql.Bit, active)
+      .query(`UPDATE Usuario SET activo_usuario = @active WHERE ID_usuario = @userId; SELECT @@ROWCOUNT AS affected;`);
+    if (result.recordset[0].affected !== 1) {
+      response.status(404).json({ message: 'Usuario no encontrado.' });
+      return;
+    }
+    response.json({ message: 'Estado del usuario actualizado.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/usuarios/:id/roles', async (request, response, next) => {
+  const userId = parseId(request.params.id);
+  const roles = Array.isArray(request.body?.roles) ? request.body.roles.filter((role: unknown): role is string => typeof role === 'string') : [];
+  const allowedRoles = ['CLIENTE', 'PROVEEDOR', 'ADMIN'];
+  if (!userId || roles.length === 0 || roles.some((role: string) => !allowedRoles.includes(role))) {
+    response.status(400).json({ message: 'Roles invalidos.' });
+    return;
+  }
+  try {
+    const pool = await getDatabasePool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const roleResult = await transaction.request().query(`SELECT ID_rol, nombre_rol FROM Rol WHERE nombre_rol IN ('CLIENTE','PROVEEDOR','ADMIN');`);
+      const roleIds = new Map(roleResult.recordset.map((role: { nombre_rol: string; ID_rol: number }) => [role.nombre_rol, role.ID_rol]));
+      await transaction.request().input('userId', sql.Int, userId).query('DELETE FROM UsuarioRol WHERE ID_usuario_usuario_rol = @userId;');
+      for (const role of roles) {
+        await transaction.request().input('userId', sql.Int, userId).input('roleId', sql.Int, roleIds.get(role)).query('INSERT INTO UsuarioRol (ID_usuario_usuario_rol, ID_rol_usuario_rol) VALUES (@userId, @roleId);');
+      }
+      await transaction.commit();
+      response.json({ message: 'Roles actualizados.' });
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.patch('/proveedores/:id/estado', async (request, response, next) => {
   const providerId = parseId(request.params.id);
   const state = typeof request.body?.estado === 'string'
@@ -232,12 +316,26 @@ router.patch('/proveedores/:id/estado', async (request, response, next) => {
 
   try {
     const pool = await getDatabasePool();
+    const contact = await pool.request()
+      .input('providerId', sql.Int, providerId)
+      .query(`
+        SELECT TOP 1
+          COALESCE(p.email_proveedor, u.email_usuario) AS email,
+          COALESCE(pe.nombres_persona, p.nombre_comercial_proveedor) AS nombre
+        FROM Proveedor p
+        LEFT JOIN ProveedorUsuario pu ON pu.ID_proveedor_proveedor_usuario = p.ID_proveedor AND pu.es_administrador_proveedor_usuario = 1
+        LEFT JOIN Usuario u ON u.ID_usuario = pu.ID_usuario_proveedor_usuario
+        LEFT JOIN Persona pe ON pe.ID_persona = u.ID_persona_usuario
+        WHERE p.ID_proveedor = @providerId;
+      `);
 
     if (state === 'APROBADO') {
       const result = await pool
         .request()
         .input('ID_proveedor', sql.Int, providerId)
         .execute('sp_AprobarProveedor');
+      const recipient = contact.recordset[0];
+      if (recipient?.email) sendProviderStatusEmail(recipient.email, recipient.nombre, state).catch((error: unknown) => console.error('No fue posible enviar correo de proveedor.', error));
       response.json({ message: 'Proveedor aprobado.', proveedor: providerId });
       return;
     }
@@ -261,6 +359,9 @@ router.patch('/proveedores/:id/estado', async (request, response, next) => {
       response.status(404).json({ message: 'Proveedor no encontrado.' });
       return;
     }
+
+    const recipient = contact.recordset[0];
+    if (recipient?.email) sendProviderStatusEmail(recipient.email, recipient.nombre, state).catch((error: unknown) => console.error('No fue posible enviar correo de proveedor.', error));
 
     response.json({ message: 'Estado del proveedor actualizado.' });
   } catch (error) {

@@ -893,6 +893,46 @@ router.get('/:id/configuracion', authenticateToken, async (request, response, ne
   }
 });
 
+router.get('/:id/reporte', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  if (!providerId) {
+    response.status(400).json({ message: 'Proveedor invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdmin = request.user!.roles.includes('ADMIN');
+    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
+      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+      return;
+    }
+
+    const result = await pool.request()
+      .input('providerId', sql.Int, providerId)
+      .query(`
+        SELECT
+          p.nombre_comercial_proveedor,
+          (SELECT COUNT(*) FROM Vehiculo WHERE ID_proveedor_vehiculo = p.ID_proveedor) AS total_vehiculos,
+          (SELECT COUNT(*) FROM Vehiculo v INNER JOIN EstadoPublicacionVehiculo ep ON ep.ID_estado_publicacion_vehiculo = v.ID_estado_publicacion_vehiculo_vehiculo WHERE v.ID_proveedor_vehiculo = p.ID_proveedor AND ep.nombre_estado_publicacion_vehiculo = 'PUBLICADO') AS vehiculos_publicados,
+          (SELECT COUNT(*) FROM Reserva r INNER JOIN Vehiculo v ON v.ID_vehiculo = r.ID_vehiculo_reserva WHERE v.ID_proveedor_vehiculo = p.ID_proveedor) AS total_reservas,
+          (SELECT COUNT(*) FROM Arriendo a INNER JOIN Reserva r ON r.ID_reserva = a.ID_reserva_arriendo INNER JOIN Vehiculo v ON v.ID_vehiculo = r.ID_vehiculo_reserva INNER JOIN EstadoArriendo ea ON ea.ID_estado_arriendo = a.ID_estado_arriendo_arriendo WHERE v.ID_proveedor_vehiculo = p.ID_proveedor AND ea.nombre_estado_arriendo = 'ACTIVO') AS arriendos_activos,
+          (SELECT COALESCE(SUM(pg.monto_pago), 0) FROM Pago pg INNER JOIN Reserva r ON r.ID_reserva = pg.ID_reserva_pago INNER JOIN Vehiculo v ON v.ID_vehiculo = r.ID_vehiculo_reserva INNER JOIN EstadoPago ep ON ep.ID_estado_pago = pg.ID_estado_pago_pago WHERE v.ID_proveedor_vehiculo = p.ID_proveedor AND ep.nombre_estado_pago = 'APROBADO') AS ingresos_aprobados,
+          (SELECT AVG(CONVERT(DECIMAL(4,2), res.calificacion_resena)) FROM Resena res INNER JOIN Arriendo a ON a.ID_arriendo = res.ID_arriendo_resena INNER JOIN Reserva r ON r.ID_reserva = a.ID_reserva_arriendo INNER JOIN Vehiculo v ON v.ID_vehiculo = r.ID_vehiculo_reserva WHERE v.ID_proveedor_vehiculo = p.ID_proveedor AND res.activo_resena = 1) AS promedio_resenas
+        FROM Proveedor p
+        WHERE p.ID_proveedor = @providerId;
+      `);
+
+    if (!result.recordset[0]) {
+      response.status(404).json({ message: 'Proveedor no encontrado.' });
+      return;
+    }
+    response.json(result.recordset[0]);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.patch('/:id/configuracion', authenticateToken, async (request, response, next) => {
   const providerId = parseId(request.params.id);
   const body = request.body as {

@@ -12,6 +12,7 @@ export interface ProfileUser {
   nombres_persona: string;
   apellido_paterno_persona: string;
   apellido_materno_persona?: string | null;
+  telefono_persona?: string | null;
 }
 
 export interface RegisterPayload {
@@ -29,7 +30,7 @@ export interface AuthContextValue {
   profile: ProfileUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
+  register: (payload: RegisterPayload) => Promise<string>;
   logout: () => void;
 }
 

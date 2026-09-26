@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import cors from 'cors';
 import express from 'express';
+import rateLimit from 'express-rate-limit';
 
 import { env } from './config/env.js';
 import { getDatabasePool } from './database/sql.js';
@@ -15,10 +16,18 @@ import rentalsRouter from './routes/rentals.js';
 
 const app = express();
 
-app.use(cors());
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.' },
+});
+
+app.use(cors({ origin: env.corsOrigin }));
 app.use(express.json());
 
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/proveedores', providersRouter);
 app.use('/api/vehiculos', vehiclesRouter);
