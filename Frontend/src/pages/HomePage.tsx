@@ -40,6 +40,33 @@ export function HomePage() {
         </div>
       </section>
 
+      <div className="route-divider" aria-hidden="true">
+        <span className="waypoint" />
+      </div>
+
+      <section className="route-steps" aria-label="Cómo funciona RentaCar">
+        <div className="route-step">
+          <span className="step-num">01</span>
+          <strong>Busca</strong>
+          <span>Compara vehículos por precio, comuna y fechas.</span>
+        </div>
+        <div className="route-step">
+          <span className="step-num">02</span>
+          <strong>Reserva</strong>
+          <span>Elige sedes y confirma tu arriendo.</span>
+        </div>
+        <div className="route-step">
+          <span className="step-num">03</span>
+          <strong>Paga</strong>
+          <span>Simula el pago online de forma segura.</span>
+        </div>
+        <div className="route-step">
+          <span className="step-num">04</span>
+          <strong>Viaja</strong>
+          <span>Retira el auto y registra tu viaje.</span>
+        </div>
+      </section>
+
       <section className="feature-grid" aria-label="Beneficios de RentaCar">
         <article className="feature-card">
           <span className="feature-number">01</span>

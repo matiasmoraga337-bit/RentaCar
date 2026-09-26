@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 
+import { Message } from '../components/Message';
+import { PageHeader } from '../components/PageHeader';
+import { ReservationCard } from '../components/ReservationCard';
+import { SectionHeading } from '../components/SectionHeading';
 import { useAuth } from '../context/useAuth';
 import { apiRequest } from '../services/api';
 
@@ -135,51 +139,44 @@ export function OperationsPage() {
 
   return (
     <main className="operations-page">
-      <section className="profile-header">
-        <div>
-          <span className="eyebrow">OPERACIONES</span>
-          <h1>Arriendos de tu flota</h1>
-          <p>Inicia los arriendos confirmados y registra las devoluciones.</p>
-        </div>
-      </section>
+      <PageHeader
+        eyebrow="OPERACIONES"
+        title="Arriendos de tu flota"
+        description="Inicia los arriendos confirmados y registra las devoluciones."
+      />
 
       {!isProviderOrAdmin && (
-        <p className="form-error" role="alert">No tienes acceso a las operaciones.</p>
+        <Message tone="error">No tienes acceso a las operaciones.</Message>
       )}
 
-      {pageError && <p className="form-error" role="alert">{pageError}</p>}
+      {pageError && <Message tone="error" className="catalog-message">{pageError}</Message>}
 
       <section className="reservations-section">
-        <div className="section-heading">
-          <h2>Reservas confirmadas sin iniciar</h2>
-          <span>{pendientes.length} pendiente(s)</span>
-        </div>
+        <SectionHeading title="Reservas confirmadas sin iniciar" subtitle={`${pendientes.length} pendiente(s)`} />
 
         {loading ? (
-          <p className="loading-state">Cargando...</p>
+          <p className="loading-inline">Cargando...</p>
         ) : pendientes.length === 0 ? (
           <p className="reviews-empty">No hay reservas confirmadas esperando inicio de arriendo.</p>
         ) : (
           <div className="reservations-list">
             {pendientes.map((reserva) => (
-              <article key={reserva.ID_reserva} className="reservation-card confirmed">
-                <header className="reservation-header">
-                  <div>
-                    <strong>{reserva.nombre_marca} {reserva.nombre_modelo}</strong>
-                    <span className="reservation-plate">{reserva.patente_vehiculo}</span>
-                  </div>
-                  <span className="status-badge status-confirmada">CONFIRMADA</span>
-                </header>
-                <dl className="reservation-meta">
-                  <div><dt>Cliente</dt><dd>{reserva.nombre_cliente} · {reserva.email_usuario}</dd></div>
-                  <div><dt>Retiro</dt><dd>{new Date(reserva.fecha_inicio_reserva).toLocaleDateString('es-CL')} · {reserva.sede_retiro}</dd></div>
-                  <div><dt>Devolución</dt><dd>{new Date(reserva.fecha_fin_reserva).toLocaleDateString('es-CL')} · {reserva.sede_devolucion}</dd></div>
-                  <div><dt>Pagado</dt><dd>{reserva.monto_pago ? `$${Number(reserva.monto_pago).toLocaleString('es-CL')}` : 'Sin registro'}</dd></div>
-                </dl>
-                <div className="reservation-actions">
+              <ReservationCard
+                key={reserva.ID_reserva}
+                title={`${reserva.nombre_marca} ${reserva.nombre_modelo}`}
+                plate={reserva.patente_vehiculo}
+                status="CONFIRMADA"
+                confirmed
+                meta={[
+                  { label: 'Cliente', value: `${reserva.nombre_cliente} · ${reserva.email_usuario}` },
+                  { label: 'Retiro', value: `${new Date(reserva.fecha_inicio_reserva).toLocaleDateString('es-CL')} · ${reserva.sede_retiro}` },
+                  { label: 'Devolución', value: `${new Date(reserva.fecha_fin_reserva).toLocaleDateString('es-CL')} · ${reserva.sede_devolucion}` },
+                  { label: 'Pagado', value: reserva.monto_pago ? `$${Number(reserva.monto_pago).toLocaleString('es-CL')}` : 'Sin registro' },
+                ]}
+                actions={
                   <button className="button button-primary button-small" onClick={() => openOperation({ kind: 'inicio', reserva })}>Iniciar arriendo</button>
-                </div>
-
+                }
+              >
                 {operation?.kind === 'inicio' && operation.reserva.ID_reserva === reserva.ID_reserva && (
                   <form className="inline-operations-form" onSubmit={handleSubmit}>
                     <label>Sede real de retiro
@@ -196,50 +193,41 @@ export function OperationsPage() {
                     </div>
                   </form>
                 )}
-              </article>
+              </ReservationCard>
             ))}
           </div>
         )}
       </section>
 
       <section className="reservations-section">
-        <div className="section-heading">
-          <h2>Arriendos</h2>
-          <span>{items.length} registro(s)</span>
-        </div>
+        <SectionHeading title="Arriendos" subtitle={`${items.length} registro(s)`} />
 
         {items.length === 0 && !loading ? (
           <p className="reviews-empty">Todavía no hay arriendos registrados.</p>
         ) : (
           <div className="reservations-list">
             {items.map((arriendo) => (
-              <article key={arriendo.ID_arriendo} className={`reservation-card ${arriendo.nombre_estado_arriendo.toLowerCase()}`}>
-                <header className="reservation-header">
-                  <div>
-                    <strong>{arriendo.nombre_marca} {arriendo.nombre_modelo}</strong>
-                    <span className="reservation-plate">{arriendo.patente_vehiculo}</span>
-                  </div>
-                  <span className={`status-badge status-${arriendo.nombre_estado_arriendo.toLowerCase()}`}>{arriendo.nombre_estado_arriendo}</span>
-                </header>
-                <dl className="reservation-meta">
-                  <div><dt>Cliente</dt><dd>{arriendo.nombre_cliente} · {arriendo.email_usuario}</dd></div>
-                  <div><dt>Retiro real</dt><dd>{new Date(arriendo.fecha_hora_retiro_real_arriendo).toLocaleString('es-CL')} · {arriendo.sede_retiro_real}</dd></div>
-                  <div><dt>Km inicial</dt><dd>{arriendo.kilometraje_inicial_arriendo.toLocaleString('es-CL')} km · Combustible {arriendo.combustible_inicial_arriendo}%</dd></div>
-                  {arriendo.kilometraje_final_arriendo !== null && (
-                    <div><dt>Devolución</dt><dd>{arriendo.fecha_hora_devolucion_real_arriendo ? new Date(arriendo.fecha_hora_devolucion_real_arriendo).toLocaleString('es-CL') : ''} · {arriendo.sede_devolucion_real ?? ''}</dd></div>
-                  )}
-                  {arriendo.kilometraje_final_arriendo !== null && (
-                    <div><dt>Km final</dt><dd>{arriendo.kilometraje_final_arriendo.toLocaleString('es-CL')} km · Combustible {arriendo.combustible_final_arriendo}%</dd></div>
-                  )}
-                  <div><dt>Reseña</dt><dd>{arriendo.resenado === 1 ? 'Publicada' : 'Pendiente'}</dd></div>
-                </dl>
-
-                {arriendo.nombre_estado_arriendo === 'ACTIVO' && (
-                  <div className="reservation-actions">
-                    <button className="button button-primary button-small" onClick={() => openOperation({ kind: 'devolucion', arriendo })}>Registrar devolución</button>
-                  </div>
-                )}
-
+              <ReservationCard
+                key={arriendo.ID_arriendo}
+                title={`${arriendo.nombre_marca} ${arriendo.nombre_modelo}`}
+                plate={arriendo.patente_vehiculo}
+                status={arriendo.nombre_estado_arriendo}
+                meta={[
+                  { label: 'Cliente', value: `${arriendo.nombre_cliente} · ${arriendo.email_usuario}` },
+                  { label: 'Retiro real', value: `${new Date(arriendo.fecha_hora_retiro_real_arriendo).toLocaleString('es-CL')} · ${arriendo.sede_retiro_real}` },
+                  { label: 'Km inicial', value: `${arriendo.kilometraje_inicial_arriendo.toLocaleString('es-CL')} km · Combustible ${arriendo.combustible_inicial_arriendo}%` },
+                  ...(arriendo.kilometraje_final_arriendo !== null
+                    ? [{ label: 'Devolución', value: `${arriendo.fecha_hora_devolucion_real_arriendo ? new Date(arriendo.fecha_hora_devolucion_real_arriendo).toLocaleString('es-CL') : ''} · ${arriendo.sede_devolucion_real ?? ''}` }]
+                    : []),
+                  ...(arriendo.kilometraje_final_arriendo !== null
+                    ? [{ label: 'Km final', value: `${arriendo.kilometraje_final_arriendo.toLocaleString('es-CL')} km · Combustible ${arriendo.combustible_final_arriendo}%` }]
+                    : []),
+                  { label: 'Reseña', value: arriendo.resenado === 1 ? 'Publicada' : 'Pendiente' },
+                ]}
+                actions={arriendo.nombre_estado_arriendo === 'ACTIVO' ? (
+                  <button className="button button-primary button-small" onClick={() => openOperation({ kind: 'devolucion', arriendo })}>Registrar devolución</button>
+                ) : undefined}
+              >
                 {operation?.kind === 'devolucion' && operation.arriendo.ID_arriendo === arriendo.ID_arriendo && (
                   <form className="inline-operations-form" onSubmit={handleSubmit}>
                     <label>Sede real de devolución
@@ -256,7 +244,7 @@ export function OperationsPage() {
                     </div>
                   </form>
                 )}
-              </article>
+              </ReservationCard>
             ))}
           </div>
         )}

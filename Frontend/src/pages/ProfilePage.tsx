@@ -2,6 +2,11 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { PageHeader } from '../components/PageHeader';
+import { SectionHeading } from '../components/SectionHeading';
+import { Message } from '../components/Message';
+import { EmptyState } from '../components/EmptyState';
+import { ReservationCard } from '../components/ReservationCard';
 import { useAuth } from '../context/useAuth';
 import { apiRequest } from '../services/api';
 
@@ -26,7 +31,7 @@ interface MyReservation {
 
 export function ProfilePage() {
   const navigate = useNavigate();
-  const { user, profile, logout } = useAuth();
+  const { user, profile, logout, refreshProfile } = useAuth();
   const [reservations, setReservations] = useState<MyReservation[]>([]);
   const [loading, setLoading] = useState(true);
   const [pageError, setPageError] = useState('');
@@ -52,6 +57,7 @@ export function ProfilePage() {
   }
 
   async function handleCancel(reservationId: number) {
+    if (!window.confirm('¿Cancelar esta reserva? Se reembolsará el pago simulado si corresponde.')) return;
     try {
       await apiRequest(`/reservas/${reservationId}/cancelar`, { method: 'PATCH' });
       loadReservations();
@@ -88,9 +94,9 @@ export function ProfilePage() {
         method: 'PATCH',
         body: JSON.stringify(values),
       });
+      await refreshProfile();
       setProfileMessage('Perfil actualizado.');
       setEditingProfile(false);
-      window.location.reload();
     } catch (error) {
       setPageError(error instanceof Error ? error.message : 'No fue posible actualizar el perfil.');
     }
@@ -104,14 +110,13 @@ export function ProfilePage() {
 
   return (
     <main className="profile-page">
-      <section className="profile-header">
-        <div>
-          <span className="eyebrow">MI CUENTA</span>
-          <h1>Tu perfil RentaCar</h1>
-          <p>Administra tus datos, reservas y arriendos.</p>
-        </div>
-        <button className="button button-outline" onClick={handleLogout}>Cerrar sesión</button>
-      </section>
+      <PageHeader
+        eyebrow="MI CUENTA"
+        title="Tu perfil RentaCar"
+        description="Administra tus datos, reservas y arriendos."
+        action={<button className="button button-outline" onClick={handleLogout}>Cerrar sesión</button>}
+      />
+
       <section className="profile-grid">
         <article className="profile-card profile-card-highlight">
           <span className="profile-label">USUARIO</span>
@@ -131,11 +136,10 @@ export function ProfilePage() {
       </section>
 
       <section className="profile-edit-section">
-        <div className="section-heading">
-          <div><span className="eyebrow">DATOS PERSONALES</span><h2>Tu información</h2></div>
+        <SectionHeading eyebrow="DATOS PERSONALES" title="Tu información">
           <button className="button button-outline button-small" onClick={() => setEditingProfile((current) => !current)}>{editingProfile ? 'Cerrar' : 'Editar'}</button>
-        </div>
-        {profileMessage && <p className="success-message" role="status">{profileMessage}</p>}
+        </SectionHeading>
+        {profileMessage && <Message tone="success">{profileMessage}</Message>}
         {editingProfile && profile && (
           <form className="profile-edit-form" onSubmit={handleProfileUpdate}>
             <label>Nombres<input name="nombres" defaultValue={profile.nombres_persona} required /></label>
@@ -148,36 +152,31 @@ export function ProfilePage() {
       </section>
 
       <section className="reservations-section">
-        <div className="section-heading">
-          <h2>Mis reservas</h2>
-          <span>Historial completo</span>
-        </div>
-        {pageError && <p className="form-error" role="alert">{pageError}</p>}
+        <SectionHeading title="Mis reservas" subtitle="Historial completo" />
+        {pageError && <Message tone="error" className="catalog-message">{pageError}</Message>}
         {loading ? (
-          <p className="loading-state">Cargando reservas...</p>
+          <p className="loading-inline">Cargando reservas...</p>
         ) : reservations.length === 0 ? (
-          <p className="reviews-empty">Aún no tienes reservas. Explora el catálogo para arrendar tu próximo vehículo.</p>
+          <EmptyState title="Aún no tienes reservas" copy="Explora el catálogo para arrendar tu próximo vehículo." />
         ) : (
           <div className="reservations-list">
             {reservations.map((reservation) => (
-              <article key={reservation.ID_reserva} className={`reservation-card ${reservation.nombre_estado_reserva.toLowerCase()}`}>
-                <header className="reservation-header">
-                  <div>
-                    <strong>{reservation.nombre_marca} {reservation.nombre_modelo}</strong>
-                    <span className="reservation-plate">{reservation.patente_vehiculo}</span>
-                  </div>
-                  <span className={`status-badge status-${reservation.nombre_estado_reserva.toLowerCase()}`}>{reservation.nombre_estado_reserva}</span>
-                </header>
-                <dl className="reservation-meta">
-                  <div><dt>Retiro</dt><dd>{new Date(reservation.fecha_inicio_reserva).toLocaleDateString('es-CL')} · {reservation.sede_retiro}</dd></div>
-                  <div><dt>Devolución</dt><dd>{new Date(reservation.fecha_fin_reserva).toLocaleDateString('es-CL')} · {reservation.sede_devolucion}</dd></div>
-                  <div><dt>Proveedor</dt><dd>{reservation.nombre_comercial_proveedor}</dd></div>
-                  <div><dt>Pago</dt><dd>{reservation.nombre_estado_pago ?? 'Sin pago'} {reservation.monto_pago ? `· $${Number(reservation.monto_pago).toLocaleString('es-CL')}` : ''}</dd></div>
-                  {reservation.estado_arriendo && (
-                    <div><dt>Arriendo</dt><dd>{reservation.estado_arriendo}</dd></div>
-                  )}
-                </dl>
-
+              <ReservationCard
+                key={reservation.ID_reserva}
+                title={`${reservation.nombre_marca} ${reservation.nombre_modelo}`}
+                plate={reservation.patente_vehiculo}
+                status={reservation.nombre_estado_reserva}
+                meta={[
+                  { label: 'Retiro', value: `${new Date(reservation.fecha_inicio_reserva).toLocaleDateString('es-CL')} · ${reservation.sede_retiro}` },
+                  { label: 'Devolución', value: `${new Date(reservation.fecha_fin_reserva).toLocaleDateString('es-CL')} · ${reservation.sede_devolucion}` },
+                  { label: 'Proveedor', value: reservation.nombre_comercial_proveedor },
+                  { label: 'Pago', value: `${reservation.nombre_estado_pago ?? 'Sin pago'}${reservation.monto_pago ? ` · $${Number(reservation.monto_pago).toLocaleString('es-CL')}` : ''}` },
+                  ...(reservation.estado_arriendo ? [{ label: 'Arriendo', value: reservation.estado_arriendo }] : []),
+                ]}
+                actions={canCancel(reservation) ? (
+                  <button className="button button-outline button-small" onClick={() => handleCancel(reservation.ID_reserva)}>Cancelar reserva</button>
+                ) : undefined}
+              >
                 {canReview(reservation) && (
                   <div className="review-form-box">
                     {reviewingFor === reservation.ID_arriendo ? (
@@ -204,13 +203,7 @@ export function ProfilePage() {
                     )}
                   </div>
                 )}
-
-                {canCancel(reservation) && (
-                  <div className="reservation-actions">
-                    <button className="button button-outline button-small" onClick={() => handleCancel(reservation.ID_reserva)}>Cancelar reserva</button>
-                  </div>
-                )}
-              </article>
+              </ReservationCard>
             ))}
           </div>
         )}

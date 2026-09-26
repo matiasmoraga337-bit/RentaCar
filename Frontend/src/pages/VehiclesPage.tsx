@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { EmptyState } from '../components/EmptyState';
 import { apiRequest } from '../services/api';
 
 interface Vehicle {
@@ -29,6 +30,17 @@ export function VehiclesPage() {
   const [availableTo, setAvailableTo] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const hasActiveFilters = Boolean(search || priceMax || commune || region || availableFrom || availableTo);
+
+  function clearFilters() {
+    setSearch('');
+    setPriceMax('');
+    setCommune('');
+    setRegion('');
+    setAvailableFrom('');
+    setAvailableTo('');
+  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -101,16 +113,18 @@ export function VehiclesPage() {
           Disponible hasta
           <input type="date" value={availableTo} onChange={(event) => setAvailableTo(event.target.value)} />
         </label>
+        <div className="filter-actions">
+          <button type="button" className="button button-outline button-small" onClick={clearFilters}>Limpiar filtros</button>
+        </div>
       </section>
 
       {loading && <p className="catalog-message">Buscando vehículos...</p>}
       {error && <p className="form-error catalog-message" role="alert">{error}</p>}
       {!loading && !error && vehicles.length === 0 && (
-        <div className="empty-state">
-          <span>✦</span>
-          <h2>Aún no hay vehículos publicados</h2>
-          <p>Cuando los proveedores publiquen su flota, aparecerá aquí.</p>
-        </div>
+        <EmptyState
+          title={hasActiveFilters ? 'Sin resultados' : 'Aún no hay vehículos publicados'}
+          copy={hasActiveFilters ? 'Prueba con otros filtros o limpia la búsqueda.' : 'Cuando los proveedores publiquen su flota, aparecerá aquí.'}
+        />
       )}
       {!loading && !error && vehicles.length > 0 && (
         <section className="vehicle-grid" aria-label="Vehículos publicados">

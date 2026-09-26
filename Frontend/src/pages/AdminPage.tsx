@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { StatusBadge } from '../components/StatusBadge';
 import { apiRequest } from '../services/api';
 
 interface SummaryResponse {
@@ -127,14 +128,6 @@ function PaginationControls({
   );
 }
 
-function badgeClass(value: string) {
-  const key = value.toUpperCase();
-  if (key.includes('APROBADO') || key.includes('PUBLICADO') || key.includes('COMPLETADA') || key.includes('CONFIRMADA')) return 'state-pill badge-aprobado';
-  if (key.includes('PENDIENTE')) return 'state-pill badge-pendiente';
-  if (key.includes('RECHAZADO') || key.includes('CANCELADA') || key.includes('REEMBOLSADO')) return 'state-pill badge-rechazado';
-  return 'state-pill badge-suspendido';
-}
-
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString('es-CL', { day: '2-digit', month: 'short', year: 'numeric' });
 }
@@ -241,6 +234,8 @@ export function AdminPage() {
   }, []);
 
   async function updateProviderState(providerId: number, estado: string) {
+    if (estado === 'SUSPENDIDO' && !window.confirm('¿Suspender a este proveedor? Dejará de operar hasta que lo vuelvas a aprobar.')) return;
+    if (estado === 'RECHAZADO' && !window.confirm('¿Rechazar a este proveedor? Su postulación quedará como rechazada.')) return;
     setBusyId(`p-${providerId}`);
     setError('');
     try {
@@ -273,6 +268,7 @@ export function AdminPage() {
   }
 
   async function updateUserState(userId: number, activo: boolean) {
+    if (!activo && !window.confirm('¿Desactivar a este usuario? Perderá el acceso al sistema.')) return;
     setBusyId(`u-${userId}`);
     try {
       await apiRequest(`/admin/usuarios/${userId}/estado`, {
@@ -384,7 +380,7 @@ export function AdminPage() {
                   <tr key={provider.ID_proveedor}>
                     <td><strong>{provider.nombre_comercial_proveedor}</strong><span className="table-sub">{provider.rut_proveedor ?? provider.razon_social_proveedor ?? 'Sin documento'}</span></td>
                     <td>{provider.nombre_tipo_proveedor}</td>
-                    <td><span className={badgeClass(provider.nombre_estado_proveedor)}>{provider.nombre_estado_proveedor}</span></td>
+                    <td><StatusBadge status={provider.nombre_estado_proveedor} variant="pill" /></td>
                     <td>{provider.total_vehiculos}</td>
                     <td>{provider.total_sedes}</td>
                     <td>{formatDate(provider.fecha_registro_proveedor)}</td>
@@ -440,8 +436,8 @@ export function AdminPage() {
                     <td>{vehicle.patente_vehiculo}</td>
                     <td>{vehicle.nombre_comercial_proveedor}</td>
                     <td>${Number(vehicle.precio_diario_base_vehiculo).toLocaleString('es-CL')}</td>
-                    <td><span className={badgeClass(vehicle.nombre_estado_vehiculo)}>{vehicle.nombre_estado_vehiculo}</span></td>
-                    <td><span className={badgeClass(vehicle.nombre_estado_publicacion_vehiculo)}>{vehicle.nombre_estado_publicacion_vehiculo}</span></td>
+                    <td><StatusBadge status={vehicle.nombre_estado_vehiculo} variant="pill" /></td>
+                    <td><StatusBadge status={vehicle.nombre_estado_publicacion_vehiculo} variant="pill" /></td>
                     <td>
                       <div className="admin-actions">
                         {vehicle.nombre_estado_publicacion_vehiculo !== 'PUBLICADO' && (
@@ -491,7 +487,7 @@ export function AdminPage() {
                     <td>{reservation.nombre_marca} {reservation.nombre_modelo}<span className="table-sub">{reservation.patente_vehiculo}</span></td>
                     <td>{reservation.nombre_comercial_proveedor}</td>
                     <td>{formatDate(reservation.fecha_inicio_reserva)} → {formatDate(reservation.fecha_fin_reserva)}</td>
-                    <td><span className={badgeClass(reservation.nombre_estado_reserva)}>{reservation.nombre_estado_reserva}</span></td>
+                    <td><StatusBadge status={reservation.nombre_estado_reserva} variant="pill" /></td>
                     <td>{reservation.nombre_estado_pago ?? '—'}</td>
                     <td>{reservation.monto_pago !== null ? `$${Number(reservation.monto_pago).toLocaleString('es-CL')}` : '—'}</td>
                   </tr>
