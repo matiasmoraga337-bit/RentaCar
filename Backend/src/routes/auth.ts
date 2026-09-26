@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { createHash, randomBytes } from 'node:crypto';
@@ -21,7 +21,9 @@ interface RegisterBody {
 }
 
 function createToken(id: number, roles: string[]): string {
-  return jwt.sign({ id, roles }, env.jwtSecret, { expiresIn: '2h' });
+  return jwt.sign({ id, roles }, env.jwtSecret, {
+    expiresIn: env.accessTokenTtl as jwt.SignOptions['expiresIn'],
+  });
 }
 
 function isValidEmail(email: string): boolean {
@@ -30,6 +32,49 @@ function isValidEmail(email: string): boolean {
 
 function hashVerificationToken(token: string) {
   return createHash('sha256').update(token).digest('hex');
+}
+
+function hashSessionToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function newRefreshToken(): string {
+  return randomBytes(32).toString('hex');
+}
+
+function sessionMetadata(request: Request) {
+  return {
+    userAgent: String(request.headers['user-agent'] ?? '').slice(0, 255) || null,
+    ip: String(request.ip ?? '').slice(0, 45) || null,
+  };
+}
+
+async function issueSession(
+  pool: sql.ConnectionPool,
+  userId: number,
+  request: Request,
+): Promise<string> {
+  const refreshToken = newRefreshToken();
+  const { userAgent, ip } = sessionMetadata(request);
+  await pool
+    .request()
+    .input('userId', sql.Int, userId)
+    .input('tokenHash', sql.Char(64), hashSessionToken(refreshToken))
+    .input('expiresAt', sql.DateTime2, new Date(Date.now() + env.refreshTokenTtlDays * 24 * 60 * 60 * 1000))
+    .input('userAgent', sql.NVarChar(255), userAgent)
+    .input('ip', sql.VarChar(45), ip)
+    .query(`
+      INSERT INTO Sesion
+      (
+        ID_usuario_sesion,
+        refresh_token_hash_sesion,
+        fecha_expiracion_sesion,
+        user_agent_sesion,
+        ip_origen_sesion
+      )
+      VALUES (@userId, @tokenHash, @expiresAt, @userAgent, @ip);
+    `);
+  return refreshToken;
 }
 
 router.post('/registro', async (request, response, next) => {
@@ -257,14 +302,143 @@ router.post('/login', async (request, response, next) => {
       .map((row: { nombre_rol: string | null }) => row.nombre_rol)
       .filter((role: string | null): role is string => typeof role === 'string');
 
+    const refreshToken = await issueSession(pool, user.ID_usuario, request);
+
     response.json({
       token: createToken(user.ID_usuario, roles),
+      refreshToken,
       user: {
         id: user.ID_usuario,
         email: user.email_usuario,
         roles,
       },
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/refresh', async (request, response, next) => {
+  const refreshToken = typeof request.body?.refreshToken === 'string'
+    ? request.body.refreshToken
+    : '';
+
+  if (!/^[a-f0-9]{64}$/.test(refreshToken)) {
+    response.status(401).json({ message: 'Sesion invalida o expirada.' });
+    return;
+  }
+
+  const pool = await getDatabasePool();
+  const transaction = new sql.Transaction(pool);
+  let transactionActive = false;
+  const oldHash = hashSessionToken(refreshToken);
+  const rotatedRefreshToken = newRefreshToken();
+  const newHash = hashSessionToken(rotatedRefreshToken);
+  const expiresAt = new Date(Date.now() + env.refreshTokenTtlDays * 24 * 60 * 60 * 1000);
+
+  try {
+    await transaction.begin();
+    transactionActive = true;
+    const { userAgent, ip } = sessionMetadata(request);
+
+    const result = await transaction
+      .request()
+      .input('oldHash', sql.Char(64), oldHash)
+      .input('newHash', sql.Char(64), newHash)
+      .input('expiresAt', sql.DateTime2, expiresAt)
+      .input('userAgent', sql.NVarChar(255), userAgent)
+      .input('ip', sql.VarChar(45), ip)
+      .query(`
+        DECLARE @userId INT;
+
+        SELECT TOP 1 @userId = ID_usuario_sesion
+        FROM Sesion
+        WHERE refresh_token_hash_sesion = @oldHash
+          AND fecha_revocacion_sesion IS NULL
+          AND fecha_expiracion_sesion > SYSDATETIME();
+
+        IF @userId IS NULL
+        BEGIN
+          SELECT 0 AS affected;
+        END
+        ELSE
+        BEGIN
+          UPDATE Sesion
+          SET fecha_revocacion_sesion = SYSDATETIME(),
+              ultimo_uso_sesion = SYSDATETIME()
+          WHERE refresh_token_hash_sesion = @oldHash;
+
+          INSERT INTO Sesion
+          (
+            ID_usuario_sesion,
+            refresh_token_hash_sesion,
+            fecha_expiracion_sesion,
+            user_agent_sesion,
+            ip_origen_sesion
+          )
+          VALUES (@userId, @newHash, @expiresAt, @userAgent, @ip);
+
+          SELECT 1 AS affected, @userId AS ID_usuario;
+        END
+      `);
+
+    const row = result.recordset[0];
+
+    if (!row || row.affected !== 1) {
+      await transaction.rollback();
+      transactionActive = false;
+      response.status(401).json({ message: 'Sesion invalida o expirada.' });
+      return;
+    }
+
+    await transaction.commit();
+    transactionActive = false;
+
+    const roleResult = await pool
+      .request()
+      .input('userId', sql.Int, row.ID_usuario)
+      .query(`
+        SELECT r.nombre_rol
+        FROM UsuarioRol ur
+        INNER JOIN Rol r ON r.ID_rol = ur.ID_rol_usuario_rol
+        WHERE ur.ID_usuario_usuario_rol = @userId;
+      `);
+    const roles = roleResult.recordset
+      .map((r: { nombre_rol: string | null }) => r.nombre_rol)
+      .filter((role: string | null): role is string => typeof role === 'string');
+
+    response.json({
+      token: createToken(row.ID_usuario, roles),
+      refreshToken: rotatedRefreshToken,
+    });
+  } catch (error) {
+    if (transactionActive) {
+      await transaction.rollback().catch(() => undefined);
+    }
+    next(error);
+  }
+});
+
+router.post('/logout', async (request, response, next) => {
+  const refreshToken = typeof request.body?.refreshToken === 'string'
+    ? request.body.refreshToken
+    : '';
+
+  try {
+    if (/^[a-f0-9]{64}$/.test(refreshToken)) {
+      const pool = await getDatabasePool();
+      await pool
+        .request()
+        .input('tokenHash', sql.Char(64), hashSessionToken(refreshToken))
+        .query(`
+          UPDATE Sesion
+          SET fecha_revocacion_sesion = SYSDATETIME()
+          WHERE refresh_token_hash_sesion = @tokenHash
+            AND fecha_revocacion_sesion IS NULL;
+        `);
+    }
+
+    response.json({ message: 'Sesion cerrada.' });
   } catch (error) {
     next(error);
   }
@@ -452,6 +626,7 @@ router.post('/restablecer-contrasena', async (request, response, next) => {
         ELSE
         BEGIN
           UPDATE Usuario SET password_hash_usuario = @passwordHash WHERE ID_usuario = @userId;
+          UPDATE Sesion SET fecha_revocacion_sesion = SYSDATETIME() WHERE ID_usuario_sesion = @userId AND fecha_revocacion_sesion IS NULL;
           UPDATE PasswordResetToken SET fecha_uso_password_reset = SYSDATETIME() WHERE token_hash_password_reset = @tokenHash;
           SELECT 1 AS affected;
         END

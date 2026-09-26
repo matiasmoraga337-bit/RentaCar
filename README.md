@@ -49,6 +49,8 @@ Las variables esperadas están documentadas en `.env.example`:
 - `PORT`: puerto de la API.
 - `CORS_ORIGIN`: origen permitido para el frontend.
 - `JWT_SECRET`: secreto local para JWT.
+- `ACCESS_TOKEN_TTL`: vida del access token (default `2h`).
+- `REFRESH_TOKEN_TTL_DAYS`: vida y rotacion del refresh token (default `30`).
 - `FRONTEND_URL`: origen usado en enlaces de confirmación.
 - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`: correo saliente.
 
@@ -62,6 +64,8 @@ npm run test:e2e:local
 ```
 
 El E2E local requiere el backend levantado y Mailpit disponible. Crea un usuario temporal, confirma su correo desde la bandeja de Mailpit y valida login y reutilizacion del token.
+
+Las sesiones usan un refresh token opaco rotado en cada renovacion: un refresh reutilizado o revocado es rechazado (401), el logout lo revoca en el servidor y restablecer la contrasena revoca todas las sesiones del usuario.
 
 ## Flujo de demo
 
