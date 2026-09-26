@@ -4,7 +4,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { apiRequest, tokenKey } from '../services/api';
+import { API_URL, apiRequest, refreshTokenKey, tokenKey } from '../services/api';
 
 import {
   AuthContext,
@@ -15,6 +15,7 @@ import {
 
 interface AuthResponse {
   token: string;
+  refreshToken: string;
   user: AuthUser;
 }
 
@@ -52,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function saveAuth(result: AuthResponse) {
     sessionStorage.setItem(tokenKey, result.token);
+    sessionStorage.setItem(refreshTokenKey, result.refreshToken);
     setUser(result.user);
 
     const profileResult = await apiRequest<ProfileResponse>('/auth/perfil', {
@@ -76,8 +78,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return result.message;
   }
 
-  function logout() {
+  async function logout() {
+    const refreshToken = sessionStorage.getItem(refreshTokenKey);
+
+    if (refreshToken) {
+      try {
+        await fetch(`${API_URL}/auth/logout`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+        });
+      } catch {
+        // El cierre local de sesion ocurre de todos modos.
+      }
+    }
+
     sessionStorage.removeItem(tokenKey);
+    sessionStorage.removeItem(refreshTokenKey);
     setUser(null);
     setProfile(null);
   }

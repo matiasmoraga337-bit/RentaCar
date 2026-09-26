@@ -20,6 +20,8 @@ export const env = {
   port: Number(process.env.PORT ?? 3000),
   corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:5173',
   jwtSecret: requiredEnv('JWT_SECRET'),
+  accessTokenTtl: process.env.ACCESS_TOKEN_TTL ?? '2h',
+  refreshTokenTtlDays: Number(process.env.REFRESH_TOKEN_TTL_DAYS ?? 30),
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:5173',
   smtp: {
     host: process.env.SMTP_HOST ?? 'localhost',

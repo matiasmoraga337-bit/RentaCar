@@ -2,14 +2,18 @@
 
 Base URL: `http://localhost:3000/api`
 
-Las rutas protegidas usan `Authorization: Bearer <jwt>`.
+Las rutas protegidas usan `Authorization: Bearer <jwt>` y renuevan su sesion automaticamente en el frontend via `POST /auth/refresh` cuando un access token expira (politica de un solo refresh concurrente; sesion borrada si el refresh falla).
 
 ## Autenticacion
 
 - `POST /auth/registro`: crea cuenta y envia confirmacion.
-- `POST /auth/login`: inicia sesion solo con correo confirmado.
+- `POST /auth/login`: inicia sesion solo con correo confirmado; devuelve `{ token, refreshToken, user }`.
+- `POST /auth/refresh`: rota el refresh token y devuelve un access token nuevo con `{ "refreshToken": "..." }`. Un refresh ya usado o revocado da 401.
+- `POST /auth/logout`: revoca la sesion con `{ "refreshToken": "..." }`.
 - `GET /auth/confirmar-cuenta?token=...`: confirma correo.
 - `POST /auth/reenviar-confirmacion`: reenvia confirmacion con `{ "email": "..." }`.
+- `POST /auth/solicitar-recuperacion`: envia enlace con `{ "email": "..." }`.
+- `POST /auth/restablecer-contrasena`: restablece y revoca todas las sesiones con `{ "token": "...", "password": "..." }`.
 - `GET /auth/perfil`: perfil autenticado.
 
 ## Catalogo y reservas
