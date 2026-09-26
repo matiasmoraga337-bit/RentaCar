@@ -481,4 +481,468 @@ router.patch('/:id/estado', authenticateToken, requireRoles('ADMIN'), async (req
   }
 });
 
+router.get('/:id/vehiculos/:vehicleId/sedes', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+
+  if (!providerId || !vehicleId) {
+    response.status(400).json({ message: 'Proveedor o vehiculo invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdmin = request.user!.roles.includes('ADMIN');
+
+    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
+      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('vehicleId', sql.Int, vehicleId)
+      .query(`
+        SELECT
+          vs.ID_sede_proveedor_vehiculo_sede AS ID_sede_proveedor,
+          s.nombre_sede_proveedor,
+          s.direccion_sede_proveedor,
+          vs.disponible_para_entrega,
+          vs.disponible_para_devolucion,
+          CASE WHEN v.ID_sede_actual_vehiculo = s.ID_sede_proveedor THEN 1 ELSE 0 END AS es_actual
+        FROM VehiculoSede vs
+        INNER JOIN SedeProveedor s
+          ON s.ID_sede_proveedor = vs.ID_sede_proveedor_vehiculo_sede
+        INNER JOIN Vehiculo v
+          ON v.ID_vehiculo = vs.ID_vehiculo_vehiculo_sede
+        WHERE vs.ID_vehiculo_vehiculo_sede = @vehicleId
+          AND v.ID_proveedor_vehiculo = @providerId
+        ORDER BY s.nombre_sede_proveedor;
+      `);
+
+    response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:id/vehiculos/:vehicleId/sedes', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+  const body = request.body as {
+    idSede?: number;
+    disponibleParaEntrega?: boolean;
+    disponibleParaDevolucion?: boolean;
+  };
+
+  if (!providerId || !vehicleId || !body.idSede) {
+    response.status(400).json({ message: 'Proveedor, vehiculo y sede son obligatorios.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdmin = request.user!.roles.includes('ADMIN');
+
+    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
+      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('vehicleId', sql.Int, vehicleId)
+      .input('sedeId', sql.Int, body.idSede)
+      .input('delivery', sql.Bit, body.disponibleParaEntrega ?? true)
+      .input('returns', sql.Bit, body.disponibleParaDevolucion ?? true)
+      .query(`
+        IF NOT EXISTS (
+          SELECT 1 FROM Vehiculo
+          WHERE ID_vehiculo = @vehicleId AND ID_proveedor_vehiculo = @providerId
+        )
+        BEGIN
+          SELECT 0 AS ok, 'Vehiculo no encontrado.' AS message;
+        END
+        ELSE IF NOT EXISTS (
+          SELECT 1 FROM SedeProveedor
+          WHERE ID_sede_proveedor = @sedeId
+            AND ID_proveedor_sede_proveedor = @providerId
+            AND activo_sede_proveedor = 1
+        )
+        BEGIN
+          SELECT 0 AS ok, 'Sede no valida para el proveedor.' AS message;
+        END
+        ELSE
+        BEGIN
+          IF EXISTS (
+            SELECT 1 FROM VehiculoSede
+            WHERE ID_vehiculo_vehiculo_sede = @vehicleId
+              AND ID_sede_proveedor_vehiculo_sede = @sedeId
+          )
+          BEGIN
+            UPDATE VehiculoSede
+            SET disponible_para_entrega = @delivery,
+                disponible_para_devolucion = @returns
+            WHERE ID_vehiculo_vehiculo_sede = @vehicleId
+              AND ID_sede_proveedor_vehiculo_sede = @sedeId;
+          END
+          ELSE
+          BEGIN
+            INSERT INTO VehiculoSede
+            (
+              ID_vehiculo_vehiculo_sede,
+              ID_sede_proveedor_vehiculo_sede,
+              disponible_para_entrega,
+              disponible_para_devolucion
+            )
+            VALUES (@vehicleId, @sedeId, @delivery, @returns);
+          END
+
+          SELECT 1 AS ok, 'Sede habilitada.' AS message;
+        END
+      `);
+
+    const outcome = result.recordset[0];
+    if (outcome.ok !== 1) {
+      response.status(400).json({ message: outcome.message });
+      return;
+    }
+
+    response.status(201).json({ message: 'Sede habilitada para el vehiculo.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id/vehiculos/:vehicleId/sedes/:sedeId', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+  const sedeId = parseId(request.params.sedeId);
+
+  if (!providerId || !vehicleId || !sedeId) {
+    response.status(400).json({ message: 'Proveedor, vehiculo o sede invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdmin = request.user!.roles.includes('ADMIN');
+
+    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
+      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('vehicleId', sql.Int, vehicleId)
+      .input('sedeId', sql.Int, sedeId)
+      .query(`
+        IF EXISTS (
+          SELECT 1 FROM Vehiculo
+          WHERE ID_vehiculo = @vehicleId
+            AND ID_proveedor_vehiculo = @providerId
+            AND ID_sede_actual_vehiculo = @sedeId
+        )
+        BEGIN
+          SELECT 0 AS ok, 'No puedes quitar la sede actual del vehiculo.' AS message;
+        END
+        ELSE
+        BEGIN
+          DELETE FROM VehiculoSede
+          WHERE ID_vehiculo_vehiculo_sede = @vehicleId
+            AND ID_sede_proveedor_vehiculo_sede = @sedeId;
+
+          SELECT CASE WHEN @@ROWCOUNT > 0 THEN 1 ELSE 0 END AS ok,
+                 CASE WHEN @@ROWCOUNT > 0 THEN 'Sede removida.' ELSE 'La sede no estaba habilitada.' END AS message;
+        END
+      `);
+
+    const outcome = result.recordset[0];
+    if (outcome.ok !== 1) {
+      response.status(400).json({ message: outcome.message });
+      return;
+    }
+
+    response.json({ message: 'Sede removida.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/:id/vehiculos/:vehicleId/movimientos', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+
+  if (!providerId || !vehicleId) {
+    response.status(400).json({ message: 'Proveedor o vehiculo invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdmin = request.user!.roles.includes('ADMIN');
+
+    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
+      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('vehicleId', sql.Int, vehicleId)
+      .query(`
+        SELECT
+          m.ID_movimiento_vehiculo,
+          m.fecha_movimiento_vehiculo,
+          m.observacion_movimiento_vehiculo,
+          so.nombre_sede_proveedor AS sede_origen,
+          sd.nombre_sede_proveedor AS sede_destino
+        FROM MovimientoVehiculo m
+        INNER JOIN Vehiculo v
+          ON v.ID_vehiculo = m.ID_vehiculo_movimiento_vehiculo
+        LEFT JOIN SedeProveedor so
+          ON so.ID_sede_proveedor = m.ID_sede_origen_movimiento_vehiculo
+        LEFT JOIN SedeProveedor sd
+          ON sd.ID_sede_proveedor = m.ID_sede_destino_movimiento_vehiculo
+        WHERE m.ID_vehiculo_movimiento_vehiculo = @vehicleId
+          AND v.ID_proveedor_vehiculo = @providerId
+        ORDER BY m.fecha_movimiento_vehiculo DESC;
+      `);
+
+    response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:id/vehiculos/:vehicleId/movimiento', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+  const body = request.body as { idSedeDestino?: number; observacion?: string };
+
+  if (!providerId || !vehicleId || !body.idSedeDestino) {
+    response.status(400).json({ message: 'Proveedor, vehiculo y sede destino son obligatorios.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdmin = request.user!.roles.includes('ADMIN');
+
+    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
+      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+      return;
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const vehicleResult = await transaction
+        .request()
+        .input('providerId', sql.Int, providerId)
+        .input('vehicleId', sql.Int, vehicleId)
+        .query(`
+          SELECT ID_sede_actual_vehiculo
+          FROM Vehiculo
+          WHERE ID_vehiculo = @vehicleId
+            AND ID_proveedor_vehiculo = @providerId;
+        `);
+
+      const vehicle = vehicleResult.recordset[0];
+
+      if (!vehicle) {
+        await transaction.rollback();
+        response.status(404).json({ message: 'Vehiculo no encontrado.' });
+        return;
+      }
+
+      const origin = vehicle.ID_sede_actual_vehiculo as number | null;
+
+      if (origin === body.idSedeDestino) {
+        await transaction.rollback();
+        response.status(400).json({ message: 'El vehiculo ya esta en esa sede.' });
+        return;
+      }
+
+      const destinationResult = await transaction
+        .request()
+        .input('providerId', sql.Int, providerId)
+        .input('sedeId', sql.Int, body.idSedeDestino)
+        .query(`
+          SELECT 1
+          FROM SedeProveedor
+          WHERE ID_sede_proveedor = @sedeId
+            AND ID_proveedor_sede_proveedor = @providerId
+            AND activo_sede_proveedor = 1;
+        `);
+
+      if (destinationResult.recordset.length === 0) {
+        await transaction.rollback();
+        response.status(400).json({ message: 'Sede destino no valida para el proveedor.' });
+        return;
+      }
+
+      await transaction
+        .request()
+        .input('vehicleId', sql.Int, vehicleId)
+        .input('origin', sql.Int, origin)
+        .input('destination', sql.Int, body.idSedeDestino)
+        .input('observation', sql.NVarChar(300), body.observacion?.trim() || null)
+        .query(`
+          INSERT INTO MovimientoVehiculo
+          (
+            ID_vehiculo_movimiento_vehiculo,
+            ID_sede_origen_movimiento_vehiculo,
+            ID_sede_destino_movimiento_vehiculo,
+            observacion_movimiento_vehiculo
+          )
+          VALUES (@vehicleId, @origin, @destination, @observation);
+
+          UPDATE Vehiculo
+          SET ID_sede_actual_vehiculo = @destination
+          WHERE ID_vehiculo = @vehicleId;
+
+          IF NOT EXISTS (
+            SELECT 1 FROM VehiculoSede
+            WHERE ID_vehiculo_vehiculo_sede = @vehicleId
+              AND ID_sede_proveedor_vehiculo_sede = @destination
+          )
+            INSERT INTO VehiculoSede
+            (
+              ID_vehiculo_vehiculo_sede,
+              ID_sede_proveedor_vehiculo_sede
+            )
+            VALUES (@vehicleId, @destination);
+        `);
+
+      await transaction.commit();
+      response.status(201).json({ message: 'Vehiculo trasladado de sede.' });
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/:id/configuracion', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+
+  if (!providerId) {
+    response.status(400).json({ message: 'Proveedor invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdmin = request.user!.roles.includes('ADMIN');
+
+    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
+      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .query(`
+        SELECT
+          ISNULL(permite_devolucion_otra_sede, 0) AS permite_devolucion_otra_sede,
+          ISNULL(permite_entrega_domicilio, 0) AS permite_entrega_domicilio,
+          ISNULL(permite_retiro_domicilio, 0) AS permite_retiro_domicilio,
+          radio_maximo_km
+        FROM ConfiguracionProveedor
+        WHERE ID_proveedor_configuracion_proveedor = @providerId;
+      `);
+
+    response.json(result.recordset[0] ?? {
+      permite_devolucion_otra_sede: false,
+      permite_entrega_domicilio: false,
+      permite_retiro_domicilio: false,
+      radio_maximo_km: null,
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/:id/configuracion', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const body = request.body as {
+    permiteDevolucionOtraSede?: boolean;
+    permiteEntregaDomicilio?: boolean;
+    permiteRetiroDomicilio?: boolean;
+    radioMaximoKm?: number | null;
+  };
+
+  if (!providerId) {
+    response.status(400).json({ message: 'Proveedor invalido.' });
+    return;
+  }
+
+  const radio = body.radioMaximoKm === null || body.radioMaximoKm === undefined
+    ? null
+    : Number(body.radioMaximoKm);
+
+  if (radio !== null && (!Number.isFinite(radio) || radio <= 0)) {
+    response.status(400).json({ message: 'Radio maximo invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdmin = request.user!.roles.includes('ADMIN');
+
+    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
+      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+      return;
+    }
+
+    await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('otherBranch', sql.Bit, body.permiteDevolucionOtraSede ?? false)
+      .input('delivery', sql.Bit, body.permiteEntregaDomicilio ?? false)
+      .input('pickup', sql.Bit, body.permiteRetiroDomicilio ?? false)
+      .input('radio', sql.Decimal(8, 2), radio)
+      .query(`
+        IF EXISTS (
+          SELECT 1 FROM ConfiguracionProveedor
+          WHERE ID_proveedor_configuracion_proveedor = @providerId
+        )
+        BEGIN
+          UPDATE ConfiguracionProveedor
+          SET permite_devolucion_otra_sede = @otherBranch,
+              permite_entrega_domicilio = @delivery,
+              permite_retiro_domicilio = @pickup,
+              radio_maximo_km = @radio
+          WHERE ID_proveedor_configuracion_proveedor = @providerId;
+        END
+        ELSE
+        BEGIN
+          INSERT INTO ConfiguracionProveedor
+          (
+            ID_proveedor_configuracion_proveedor,
+            permite_devolucion_otra_sede,
+            permite_entrega_domicilio,
+            permite_retiro_domicilio,
+            radio_maximo_km
+          )
+          VALUES (@providerId, @otherBranch, @delivery, @pickup, @radio);
+        END
+      `);
+
+    response.json({ message: 'Configuracion actualizada.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

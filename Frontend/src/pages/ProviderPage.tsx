@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 
 import { apiRequest } from '../services/api';
+import { FleetVehiclePanel } from './FleetVehiclePanel';
 
 interface Provider {
   ID_proveedor: number;
@@ -34,6 +35,13 @@ interface ProviderVehicle {
   nombre_estado_publicacion_vehiculo: string;
 }
 
+interface ProviderConfig {
+  permite_devolucion_otra_sede: boolean;
+  permite_entrega_domicilio: boolean;
+  permite_retiro_domicilio: boolean;
+  radio_maximo_km: number | null;
+}
+
 function fetchProviders() {
   return apiRequest<Provider[]>('/proveedores/me');
 }
@@ -44,6 +52,15 @@ export function ProviderPage() {
   const [catalogs, setCatalogs] = useState<Catalogs | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [vehicles, setVehicles] = useState<ProviderVehicle[]>([]);
+  const [expandedVehicle, setExpandedVehicle] = useState<number | null>(null);
+  const [providerConfig, setProviderConfig] = useState<ProviderConfig>({
+    permite_devolucion_otra_sede: false,
+    permite_entrega_domicilio: false,
+    permite_retiro_domicilio: false,
+    radio_maximo_km: null,
+  });
+  const [configMessage, setConfigMessage] = useState('');
+  const [configSubmitting, setConfigSubmitting] = useState(false);
   const [form, setForm] = useState({
     tipo: 'EMPRESA',
     nombreComercial: '',
@@ -88,11 +105,14 @@ export function ProviderPage() {
       apiRequest<Branch[]>(`/proveedores/${selectedProvider}/sedes`),
       apiRequest<ProviderVehicle[]>(`/proveedores/${selectedProvider}/vehiculos`),
       apiRequest<Catalogs>('/catalogos/vehiculos'),
+      apiRequest<ProviderConfig>(`/proveedores/${selectedProvider}/configuracion`),
     ])
-      .then(([branchResult, vehicleResult, catalogResult]) => {
+      .then(([branchResult, vehicleResult, catalogResult, configResult]) => {
         setBranches(branchResult);
         setVehicles(vehicleResult);
         setCatalogs(catalogResult);
+        setProviderConfig(configResult);
+        setExpandedVehicle(null);
       })
       .catch((requestError: Error) => setError(requestError.message));
   }, [selectedProvider]);
@@ -107,6 +127,31 @@ export function ProviderPage() {
 
   function updateBranchField(field: keyof typeof branchForm, value: string) {
     setBranchForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleConfigSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProvider) return;
+
+    setConfigSubmitting(true);
+    setConfigMessage('');
+    setError('');
+    try {
+      await apiRequest(`/proveedores/${selectedProvider}/configuracion`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          permiteDevolucionOtraSede: providerConfig.permite_devolucion_otra_sede,
+          permiteEntregaDomicilio: providerConfig.permite_entrega_domicilio,
+          permiteRetiroDomicilio: providerConfig.permite_retiro_domicilio,
+          radioMaximoKm: providerConfig.radio_maximo_km,
+        }),
+      });
+      setConfigMessage('Configuración actualizada.');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar la configuración.');
+    } finally {
+      setConfigSubmitting(false);
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -316,6 +361,16 @@ export function ProviderPage() {
                 <button className="button button-quiet button-full" disabled={branchSubmitting}>{branchSubmitting ? 'Registrando...' : 'Agregar sede'}</button>
               </form>
 
+              <form className="branch-form" onSubmit={handleConfigSubmit}>
+                <h3>Configuración operativa</h3>
+                <label className="fleet-check"><input type="checkbox" checked={providerConfig.permite_devolucion_otra_sede} onChange={(event) => setProviderConfig((current) => ({ ...current, permite_devolucion_otra_sede: event.target.checked }))} /> Permitir devolución en otra sede</label>
+                <label className="fleet-check"><input type="checkbox" checked={providerConfig.permite_entrega_domicilio} onChange={(event) => setProviderConfig((current) => ({ ...current, permite_entrega_domicilio: event.target.checked }))} /> Permitir entrega a domicilio</label>
+                <label className="fleet-check"><input type="checkbox" checked={providerConfig.permite_retiro_domicilio} onChange={(event) => setProviderConfig((current) => ({ ...current, permite_retiro_domicilio: event.target.checked }))} /> Permitir retiro a domicilio</label>
+                <label>Radio máximo (km)<input type="number" min="0.01" step="0.01" value={providerConfig.radio_maximo_km ?? ''} onChange={(event) => setProviderConfig((current) => ({ ...current, radio_maximo_km: event.target.value ? Number(event.target.value) : null }))} /></label>
+                {configMessage && <p className="success-message" role="status">{configMessage}</p>}
+                <button className="button button-quiet button-full" disabled={configSubmitting}>{configSubmitting ? 'Guardando...' : 'Guardar configuración'}</button>
+              </form>
+
               <form className="vehicle-form" onSubmit={handleVehicleSubmit}>
               <label>
                 Sede actual
@@ -367,10 +422,20 @@ export function ProviderPage() {
             <div className="fleet-list">
               <h3>Vehículos registrados</h3>
               {vehicles.length === 0 ? <p className="empty-copy">Aún no hay vehículos para este proveedor.</p> : vehicles.map((vehicle) => (
-                <article className="fleet-item" key={vehicle.ID_vehiculo}>
-                  <div><strong>{vehicle.nombre_marca} {vehicle.nombre_modelo}</strong><p>{vehicle.patente_vehiculo} · ${Number(vehicle.precio_diario_base_vehiculo).toLocaleString('es-CL')} diarios</p></div>
-                  <span>{vehicle.nombre_estado_publicacion_vehiculo}</span>
-                </article>
+                <Fragment key={vehicle.ID_vehiculo}>
+                  <article className="fleet-item">
+                    <div><strong>{vehicle.nombre_marca} {vehicle.nombre_modelo}</strong><p>{vehicle.patente_vehiculo} · ${Number(vehicle.precio_diario_base_vehiculo).toLocaleString('es-CL')} diarios</p></div>
+                    <div className="fleet-item-actions">
+                      <span>{vehicle.nombre_estado_publicacion_vehiculo}</span>
+                      <button className="button button-outline button-small" onClick={() => setExpandedVehicle((current) => current === vehicle.ID_vehiculo ? null : vehicle.ID_vehiculo)}>
+                        {expandedVehicle === vehicle.ID_vehiculo ? 'Cerrar' : 'Gestionar'}
+                      </button>
+                    </div>
+                  </article>
+                  {expandedVehicle === vehicle.ID_vehiculo && selectedProvider && (
+                    <FleetVehiclePanel providerId={selectedProvider} vehicle={vehicle} branches={branches} />
+                  )}
+                </Fragment>
               ))}
             </div>
           </div>
