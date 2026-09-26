@@ -31,6 +31,17 @@ router.get('/', async (request, response, next) => {
   const availableFrom = filters.availableFrom || null;
   const availableTo = filters.availableTo || null;
 
+  const validDate = (value: string | null) => {
+    if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+    const parsed = new Date(`${value}T00:00:00Z`);
+    return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  };
+
+  if ((availableFrom && !validDate(availableFrom)) || (availableTo && !validDate(availableTo))) {
+    response.status(400).json({ message: 'Las fechas deben tener formato valido (AAAA-MM-DD).' });
+    return;
+  }
+
   if (availableFrom && availableTo && availableTo <= availableFrom) {
     response.status(400).json({ message: 'La fecha de termino debe ser posterior a la fecha de inicio.' });
     return;
@@ -132,7 +143,9 @@ router.get('/:id', async (request, response, next) => {
         SELECT
           s.ID_sede_proveedor,
           s.nombre_sede_proveedor,
-          s.direccion_sede_proveedor
+          s.direccion_sede_proveedor,
+          vs.disponible_para_entrega,
+          vs.disponible_para_devolucion
         FROM VehiculoSede vs
         INNER JOIN SedeProveedor s
           ON s.ID_sede_proveedor = vs.ID_sede_proveedor_vehiculo_sede
@@ -140,7 +153,21 @@ router.get('/:id', async (request, response, next) => {
           AND s.activo_sede_proveedor = 1;
       `);
 
-    response.json({ vehicle, branches: branches.recordset });
+    const providerConfig = await pool
+      .request()
+      .input('providerId', sql.Int, vehicle.ID_proveedor)
+      .query(`
+        SELECT
+          ISNULL(permite_devolucion_otra_sede, 0) AS permite_devolucion_otra_sede
+        FROM ConfiguracionProveedor
+        WHERE ID_proveedor_configuracion_proveedor = @providerId;
+      `);
+
+    response.json({
+      vehicle,
+      branches: branches.recordset,
+      providerConfig: providerConfig.recordset[0] ?? { permite_devolucion_otra_sede: false },
+    });
   } catch (error) {
     next(error);
   }

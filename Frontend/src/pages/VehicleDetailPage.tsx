@@ -17,7 +17,14 @@ interface Vehicle {
 
 interface VehicleDetail {
   vehicle: Vehicle;
-  branches: { ID_sede_proveedor: number; nombre_sede_proveedor: string; direccion_sede_proveedor: string }[];
+  branches: {
+    ID_sede_proveedor: number;
+    nombre_sede_proveedor: string;
+    direccion_sede_proveedor: string;
+    disponible_para_entrega: boolean;
+    disponible_para_devolucion: boolean;
+  }[];
+  providerConfig: { permite_devolucion_otra_sede: boolean };
 }
 
 interface VehicleReviews {
@@ -40,7 +47,8 @@ export function VehicleDetailPage() {
   const [reviews, setReviews] = useState<VehicleReviews | null>(null);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [branchId, setBranchId] = useState('');
+  const [pickupBranchId, setPickupBranchId] = useState('');
+  const [returnBranchId, setReturnBranchId] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -53,7 +61,10 @@ export function VehicleDetailPage() {
       .then(([result, reviewsResult]) => {
         setDetail(result);
         setReviews(reviewsResult);
-        if (result.branches[0]) setBranchId(String(result.branches[0].ID_sede_proveedor));
+        const pickup = result.branches.find((branch) => branch.disponible_para_entrega);
+        const returned = result.branches.find((branch) => branch.disponible_para_devolucion);
+        if (pickup) setPickupBranchId(String(pickup.ID_sede_proveedor));
+        if (returned) setReturnBranchId(String(returned.ID_sede_proveedor));
       })
       .catch((requestError: Error) => setError(requestError.message));
   }, [id]);
@@ -74,7 +85,7 @@ export function VehicleDetailPage() {
     setError('');
     const days = calculateDays();
 
-    if (!branchId || days <= 0) {
+    if (!pickupBranchId || !returnBranchId || days <= 0) {
       setError('Selecciona una sede y un rango de fechas válido.');
       setSubmitting(false);
       return;
@@ -85,8 +96,8 @@ export function VehicleDetailPage() {
         method: 'POST',
         body: JSON.stringify({
           idVehiculo: detail.vehicle.ID_vehiculo,
-          idSedeRetiro: Number(branchId),
-          idSedeDevolucion: Number(branchId),
+           idSedeRetiro: Number(pickupBranchId),
+           idSedeDevolucion: Number(returnBranchId),
           fechaInicio: startDate,
           fechaFin: endDate,
         }),
@@ -122,6 +133,11 @@ export function VehicleDetailPage() {
   const { vehicle } = detail;
   const days = calculateDays();
   const total = days * Number(vehicle.precio_diario_base_vehiculo);
+  const pickupBranches = detail.branches.filter((branch) => branch.disponible_para_entrega);
+  const returnBranches = detail.branches.filter((branch) =>
+    branch.disponible_para_devolucion
+      && (detail.providerConfig.permite_devolucion_otra_sede || String(branch.ID_sede_proveedor) === pickupBranchId),
+  );
 
   return (
     <main className="detail-page">
@@ -142,10 +158,23 @@ export function VehicleDetailPage() {
               <h2>Reserva tu vehículo</h2>
               <label>Fecha de retiro<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required /></label>
               <label>Fecha de devolución<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></label>
-              <label>Sede de retiro y devolución
-                <select value={branchId} onChange={(event) => setBranchId(event.target.value)} required>
-                  <option value="">Selecciona una sede</option>
-                  {detail.branches.map((branch) => <option key={branch.ID_sede_proveedor} value={branch.ID_sede_proveedor}>{branch.nombre_sede_proveedor}</option>)}
+              <label>Sede de retiro
+                <select value={pickupBranchId} onChange={(event) => {
+                  const nextPickup = event.target.value;
+                  setPickupBranchId(nextPickup);
+                  if (!detail.providerConfig.permite_devolucion_otra_sede) {
+                    const sameBranch = returnBranches.find((branch) => String(branch.ID_sede_proveedor) === nextPickup);
+                    setReturnBranchId(sameBranch ? nextPickup : '');
+                  }
+                }} required>
+                  <option value="">Selecciona una sede de retiro</option>
+                  {pickupBranches.map((branch) => <option key={branch.ID_sede_proveedor} value={branch.ID_sede_proveedor}>{branch.nombre_sede_proveedor}</option>)}
+                </select>
+              </label>
+              <label>Sede de devolución
+                <select value={returnBranchId} onChange={(event) => setReturnBranchId(event.target.value)} required>
+                  <option value="">Selecciona una sede de devolución</option>
+                  {returnBranches.map((branch) => <option key={branch.ID_sede_proveedor} value={branch.ID_sede_proveedor}>{branch.nombre_sede_proveedor}</option>)}
                 </select>
               </label>
               {days > 0 && <div className="total-line"><span>{days} días</span><strong>${total.toLocaleString('es-CL')}</strong></div>}

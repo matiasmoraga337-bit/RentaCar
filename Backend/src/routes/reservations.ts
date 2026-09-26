@@ -35,6 +35,20 @@ router.post('/', authenticateToken, async (request, response, next) => {
 
     response.status(201).json(result.recordset[0]);
   } catch (error) {
+    const sqlError = error as { number?: number };
+    const badRequestErrors = [51004, 51005, 51006, 51007, 51008, 51009, 51010, 51011, 51012];
+    if (badRequestErrors.includes(sqlError.number ?? 0)) {
+      response.status(400).json({ message: 'Los datos de la reserva no cumplen las reglas del vehículo o proveedor.' });
+      return;
+    }
+    if (sqlError.number === 51013) {
+      response.status(409).json({ message: 'El vehiculo ya esta reservado en esas fechas.' });
+      return;
+    }
+    if (sqlError.number === 51014) {
+      response.status(409).json({ message: 'El proveedor no permite devolucion en otra sede.' });
+      return;
+    }
     next(error);
   }
 });
