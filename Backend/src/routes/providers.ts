@@ -748,10 +748,24 @@ router.post('/:id/vehiculos/:vehicleId/movimiento', authenticateToken, async (re
         .input('providerId', sql.Int, providerId)
         .input('vehicleId', sql.Int, vehicleId)
         .query(`
-          SELECT ID_sede_actual_vehiculo
-          FROM Vehiculo
-          WHERE ID_vehiculo = @vehicleId
-            AND ID_proveedor_vehiculo = @providerId;
+          SELECT
+            v.ID_sede_actual_vehiculo,
+            ev.nombre_estado_vehiculo,
+            CASE WHEN EXISTS (
+              SELECT 1
+              FROM Arriendo a
+              INNER JOIN EstadoArriendo ea
+                ON ea.ID_estado_arriendo = a.ID_estado_arriendo_arriendo
+              INNER JOIN Reserva r
+                ON r.ID_reserva = a.ID_reserva_arriendo
+              WHERE r.ID_vehiculo_reserva = v.ID_vehiculo
+                AND ea.nombre_estado_arriendo = 'ACTIVO'
+            ) THEN 1 ELSE 0 END AS tiene_arriendo_activo
+          FROM Vehiculo v
+          INNER JOIN EstadoVehiculo ev
+            ON ev.ID_estado_vehiculo = v.ID_estado_vehiculo_vehiculo
+          WHERE v.ID_vehiculo = @vehicleId
+            AND v.ID_proveedor_vehiculo = @providerId;
         `);
 
       const vehicle = vehicleResult.recordset[0];
@@ -763,6 +777,12 @@ router.post('/:id/vehiculos/:vehicleId/movimiento', authenticateToken, async (re
       }
 
       const origin = vehicle.ID_sede_actual_vehiculo as number | null;
+
+      if (vehicle.nombre_estado_vehiculo === 'ARRENDADO' || vehicle.tiene_arriendo_activo === 1) {
+        await transaction.rollback();
+        response.status(409).json({ message: 'No puedes trasladar un vehiculo con un arriendo activo.' });
+        return;
+      }
 
       if (origin === body.idSedeDestino) {
         await transaction.rollback();

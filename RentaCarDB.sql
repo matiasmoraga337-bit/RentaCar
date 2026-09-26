@@ -1185,7 +1185,7 @@ GO
    13. PROCEDIMIENTO: CREAR RESERVA
    ================================================================ */
 
-CREATE PROCEDURE sp_CrearReserva
+CREATE OR ALTER PROCEDURE sp_CrearReserva
     @ID_usuario_cliente INT,
     @ID_vehiculo INT,
     @ID_sede_retiro INT,
@@ -1281,6 +1281,16 @@ BEGIN
               AND vs.disponible_para_devolucion = 1
         )
             THROW 51012, 'La sede de devolucion no esta habilitada.', 1;
+
+        IF @ID_sede_retiro <> @ID_sede_devolucion
+           AND NOT EXISTS
+           (
+               SELECT 1
+               FROM ConfiguracionProveedor
+               WHERE ID_proveedor_configuracion_proveedor = @ID_proveedor
+                 AND permite_devolucion_otra_sede = 1
+           )
+            THROW 51014, 'El proveedor no permite devolucion en otra sede.', 1;
 
         IF EXISTS
         (
