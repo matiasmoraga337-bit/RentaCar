@@ -1,5 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 
+import { PageHeader } from '../components/PageHeader';
+import { SectionHeading } from '../components/SectionHeading';
 import { apiRequest } from '../services/api';
 import { FleetVehiclePanel } from './FleetVehiclePanel';
 
@@ -258,13 +260,11 @@ export function ProviderPage() {
 
   return (
     <main className="provider-page">
-      <section className="profile-header">
-        <div>
-          <span className="eyebrow">ESPACIO DEL PROVEEDOR</span>
-          <h1>Publica tu flota.</h1>
-          <p>Registra tu proveedor para comenzar a gestionar vehículos y sedes.</p>
-        </div>
-      </section>
+      <PageHeader
+        eyebrow="ESPACIO DEL PROVEEDOR"
+        title="Publica tu flota."
+        description="Registra tu proveedor para comenzar a gestionar vehículos y sedes."
+      />
 
       <section className="provider-layout">
         <article className="provider-form-card">
@@ -311,13 +311,7 @@ export function ProviderPage() {
         </article>
 
         <section className="provider-list">
-          <div className="section-heading">
-            <div>
-              <span className="eyebrow">MIS PROVEEDORES</span>
-              <h2>Espacios registrados</h2>
-            </div>
-            <span className="catalog-count">{providers.length}</span>
-          </div>
+          <SectionHeading eyebrow="MIS PROVEEDORES" title="Espacios registrados"><span className="catalog-count">{providers.length}</span></SectionHeading>
           {providers.length === 0 ? (
             <div className="empty-state compact-empty">
               <span>✦</span>
@@ -337,11 +331,7 @@ export function ProviderPage() {
       </section>
 
       <section className="fleet-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">GESTIÓN DE FLOTA</span>
-            <h2>Registra tus vehículos</h2>
-          </div>
+        <SectionHeading eyebrow="GESTIÓN DE FLOTA" title="Registra tus vehículos">
           <select
             value={selectedProvider ?? ''}
             onChange={(event) => setSelectedProvider(Number(event.target.value) || null)}
@@ -354,7 +344,7 @@ export function ProviderPage() {
               </option>
             ))}
           </select>
-        </div>
+        </SectionHeading>
 
         {selectedProvider && catalogs && (
           <div className="fleet-layout">
