@@ -647,6 +647,66 @@ router.post('/restablecer-contrasena', async (request, response, next) => {
   }
 });
 
+router.post('/cambiar-contrasena', authenticateToken, async (request, response, next) => {
+  const actualPassword = typeof request.body?.actualPassword === 'string'
+    ? request.body.actualPassword
+    : '';
+  const nuevaPassword = typeof request.body?.nuevaPassword === 'string'
+    ? request.body.nuevaPassword
+    : '';
+
+  if (!actualPassword || !nuevaPassword || nuevaPassword.length < 8 || nuevaPassword === actualPassword) {
+    response.status(400).json({ message: 'Contrasena actual invalida o nueva contrasena debil.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const userResult = await pool
+      .request()
+      .input('userId', sql.Int, request.user!.id)
+      .query(`
+        SELECT password_hash_usuario
+        FROM Usuario
+        WHERE ID_usuario = @userId;
+      `);
+    const user = userResult.recordset[0];
+
+    if (!user) {
+      response.status(404).json({ message: 'Usuario no encontrado.' });
+      return;
+    }
+
+    const passwordMatches = await bcrypt.compare(actualPassword, user.password_hash_usuario);
+
+    if (!passwordMatches) {
+      response.status(400).json({ message: 'La contrasena actual es incorrecta.' });
+      return;
+    }
+
+    const newHash = await bcrypt.hash(nuevaPassword, 12);
+
+    await pool
+      .request()
+      .input('userId', sql.Int, request.user!.id)
+      .input('hash', sql.VarChar(255), newHash)
+      .query(`
+        UPDATE Usuario
+        SET password_hash_usuario = @hash
+        WHERE ID_usuario = @userId;
+
+        UPDATE Sesion
+        SET fecha_revocacion_sesion = SYSDATETIME()
+        WHERE ID_usuario_sesion = @userId
+          AND fecha_revocacion_sesion IS NULL;
+      `);
+
+    response.json({ message: 'Contrasena actualizada. Vuelve a iniciar sesion.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/perfil', authenticateToken, async (request, response, next) => {
   try {
     const pool = await getDatabasePool();
