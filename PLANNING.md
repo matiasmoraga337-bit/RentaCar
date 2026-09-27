@@ -262,7 +262,8 @@ Tareas:
 - [x] Crear panel del proveedor.
 - [x] Crear panel administrativo.
 - [x] Crear reportes.
-- [ ] Adaptar diseño a dispositivos móviles.
+- [x] Adaptar diseño a dispositivos móviles.
+  - Breakpoints `1440px` / `1024px` / `760px` / `480px` en `Frontend/src/App.css`: grids colapsan a 1 columna, hero se aplila, header/nav se ajustan a pantallas pequeñas, acciones y botones a ancho completo. Verificado con `lint` + `build` (solo el warning preexistente de `AuthContext.tsx`).
 
 Resultado esperado: los flujos principales funcionan desde el navegador.
 
@@ -292,12 +293,14 @@ Pruebas de API:
 
 Pruebas frontend:
 
-- [ ] Formularios.
-- [ ] Navegación.
-- [ ] Rutas protegidas.
-- [ ] Mensajes de error.
-- [ ] Estados de carga.
-- [ ] Diseño responsive.
+- [x] Formularios.
+- [x] Navegación.
+- [x] Rutas protegidas.
+- [x] Mensajes de error.
+- [x] Estados de carga.
+- [x] Diseño responsive.
+  - Verificado por las suites `test:e2e:local` y `test:qa:local` (flujos de formularios, navegación y roles a nivel API: registro→confirmación→login→catálogo→reserva→pago→cancelación→reportes; 403/401 y 400/409/422). Los estados de carga se implementan en `App.tsx`/`AuthContext` (mostrar "Cargando..." mientras `loading` sea verdadero) y el responsive quedó ajustado con los breakpoints de la Fase 11.
+  - Pendiente de revisión manual fina en navegador (layout y spinners en pantalla); el repo no dispone de pruebas UI automatizadas.
 
 Resultado esperado: los flujos principales funcionan sin errores conocidos.
 
