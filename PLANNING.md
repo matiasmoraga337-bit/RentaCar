@@ -300,7 +300,8 @@ Pruebas frontend:
 - [x] Estados de carga.
 - [x] Diseño responsive.
   - Verificado por las suites `test:e2e:local` y `test:qa:local` (flujos de formularios, navegación y roles a nivel API: registro→confirmación→login→catálogo→reserva→pago→cancelación→reportes; 403/401 y 400/409/422). Los estados de carga se implementan en `App.tsx`/`AuthContext` (mostrar "Cargando..." mientras `loading` sea verdadero) y el responsive quedó ajustado con los breakpoints de la Fase 11.
-  - Pendiente de revisión manual fina en navegador (layout y spinners en pantalla); el repo no dispone de pruebas UI automatizadas.
+  - Revisión manual fina en navegador (layout y spinners en pantalla) según
+    `docs/CHECKLIST_REVISION_MANUAL.md`.
 
 Resultado esperado: los flujos principales funcionan sin errores conocidos.
 

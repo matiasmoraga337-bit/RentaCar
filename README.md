@@ -127,6 +127,7 @@ Las sesiones usan un refresh token opaco rotado en cada renovacion: un refresh r
 
 - `docs/API.md`: endpoints de la API REST.
 - `docs/MODELO_RELACIONAL.md`: modelo relacional, vistas, procedimientos y triggers.
+- `docs/CHECKLIST_REVISION_MANUAL.md`: checklist para probar la interfaz en el navegador.
 - `RentaCar_IMAGEN_ModeloRelacional.png`: diagrama relacional.
 - `DESIGN.md`: diseno del sistema.
 - `ESPECIFICACION_PROYECTO.md`: especificacion del proyecto.
