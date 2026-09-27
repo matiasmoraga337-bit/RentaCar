@@ -1,13 +1,13 @@
 import { Router } from 'express';
 
 import { getDatabasePool, sql } from '../database/sql.js';
-import { authenticateToken, requireRoles } from '../middlewares/auth.js';
+import { authenticateToken, requireFreshRoles } from '../middlewares/auth.js';
 import { sendProviderStatusEmail } from '../services/mail.js';
 import { parseId } from '../utils/id.js';
 
 const router = Router();
 
-router.use(authenticateToken, requireRoles('ADMIN'));
+router.use(authenticateToken, requireFreshRoles('ADMIN'));
 
 router.get('/resumen', async (_request, response, next) => {
   try {
@@ -366,6 +366,16 @@ router.patch('/usuarios/:id/roles', async (request, response, next) => {
       for (const role of roles) {
         await transaction.request().input('userId', sql.Int, userId).input('roleId', sql.Int, roleIds.get(role)).query('INSERT INTO UsuarioRol (ID_usuario_usuario_rol, ID_rol_usuario_rol) VALUES (@userId, @roleId);');
       }
+      if (roles.includes('CLIENTE')) {
+        await transaction.request().input('userId', sql.Int, userId).query(`
+          IF NOT EXISTS (
+            SELECT 1 FROM Cliente WHERE ID_usuario_cliente = @userId
+          )
+          BEGIN
+            INSERT INTO Cliente (ID_usuario_cliente) VALUES (@userId);
+          END
+        `);
+      }
       await transaction.commit();
       response.json({ message: 'Roles actualizados.' });
     } catch (error) {
@@ -491,6 +501,100 @@ router.patch('/vehiculos/:id/publicacion', async (request, response, next) => {
     }
 
     response.json({ message: 'Estado de publicacion actualizado.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/resenas', async (request, response, next) => {
+  const page = Math.max(1, Number(request.query.page) || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(request.query.pageSize) || 20));
+
+  try {
+    const pool = await getDatabasePool();
+    const result = await pool
+      .request()
+      .input('page', sql.Int, page)
+      .input('pageSize', sql.Int, pageSize)
+      .query(`
+        DECLARE @total INT;
+
+        SELECT @total = COUNT(*) FROM Resena;
+
+        SELECT
+          res.ID_resena,
+          res.calificacion_resena,
+          res.comentario_resena,
+          res.fecha_resena,
+          res.activo_resena,
+          v.ID_vehiculo,
+          v.patente_vehiculo,
+          mo.nombre_modelo,
+          ma.nombre_marca,
+          po.nombre_comercial_proveedor,
+          CONCAT(p.nombres_persona, ' ', p.apellido_paterno_persona) AS nombre_cliente
+        FROM Resena res
+        INNER JOIN Arriendo a ON a.ID_arriendo = res.ID_arriendo_resena
+        INNER JOIN Reserva re ON re.ID_reserva = a.ID_reserva_arriendo
+        INNER JOIN Vehiculo v ON v.ID_vehiculo = re.ID_vehiculo_reserva
+        INNER JOIN Modelo mo ON mo.ID_modelo = v.ID_modelo_vehiculo
+        INNER JOIN Marca ma ON ma.ID_marca = mo.ID_marca_modelo
+        INNER JOIN Proveedor po ON po.ID_proveedor = v.ID_proveedor_vehiculo
+        INNER JOIN Cliente cl ON cl.ID_usuario_cliente = re.ID_usuario_cliente_reserva
+        INNER JOIN Usuario u ON u.ID_usuario = cl.ID_usuario_cliente
+        INNER JOIN Persona p ON p.ID_persona = u.ID_persona_usuario
+        ORDER BY res.fecha_resena DESC
+        OFFSET (@page - 1) * @pageSize ROWS
+        FETCH NEXT @pageSize ROWS ONLY;
+
+        SELECT @total AS total;
+      `);
+
+    const recordsets = Array.isArray(result.recordsets) ? result.recordsets : Object.values(result.recordsets);
+    const items = recordsets[0];
+    const total = recordsets[1]?.[0]?.total ?? 0;
+
+    response.json({
+      items,
+      total,
+      page,
+      pageSize,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/resenas/:id', async (request, response, next) => {
+  const reviewId = parseId(request.params.id);
+  const visible = request.body?.visible;
+
+  if (!reviewId || typeof visible !== 'boolean') {
+    response.status(400).json({ message: 'Resena o visibilidad invalida.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const result = await pool
+      .request()
+      .input('reviewId', sql.Int, reviewId)
+      .input('visible', sql.Bit, visible)
+      .query(`
+        UPDATE Resena
+        SET activo_resena = @visible
+        WHERE ID_resena = @reviewId;
+
+        SELECT @@ROWCOUNT AS affected;
+      `);
+
+    if (result.recordset[0].affected === 0) {
+      response.status(404).json({ message: 'Resena no encontrada.' });
+      return;
+    }
+
+    response.json({ message: visible ? 'Resena visible.' : 'Resena ocultada.' });
   } catch (error) {
     next(error);
   }
