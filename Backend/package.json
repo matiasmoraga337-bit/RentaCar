@@ -7,7 +7,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test:e2e:local": "node scripts/e2e-local.mjs && node scripts/e2e-flows-local.mjs"
+    "test:e2e:local": "node scripts/e2e-local.mjs && node scripts/e2e-flows-local.mjs",
+    "seed:demo": "node scripts/seed-demo.mjs"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
