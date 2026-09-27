@@ -19,18 +19,18 @@ Desarrollar una aplicación web Marketplace Multi-Proveedor para publicar, busca
 
 La primera versión funcional debe incluir:
 
-- [ ] Registro e inicio de sesión.
-- [ ] Roles de cliente, proveedor y administrador.
-- [ ] Registro de proveedores empresa y persona natural.
-- [ ] Gestión de sedes.
-- [ ] Registro y publicación de vehículos.
-- [ ] Búsqueda y filtrado.
-- [ ] Reservas sin superposición de fechas.
-- [ ] Pagos simulados.
-- [ ] Inicio y devolución de arriendos.
-- [ ] Reseñas.
-- [ ] Reporte de proveedores.
-- [ ] Auditoría básica.
+- [x] Registro e inicio de sesión.
+- [x] Roles de cliente, proveedor y administrador.
+- [x] Registro de proveedores empresa y persona natural.
+- [x] Gestión de sedes.
+- [x] Registro y publicación de vehículos.
+- [x] Búsqueda y filtrado.
+- [x] Reservas sin superposición de fechas.
+- [x] Pagos simulados.
+- [x] Inicio y devolución de arriendos.
+- [x] Reseñas.
+- [x] Reporte de proveedores.
+- [x] Auditoría básica.
 
 Quedan fuera de la primera versión GPS, seguros, multas, facturación electrónica, pagos bancarios reales y tarifas dinámicas.
 
@@ -56,9 +56,9 @@ Tareas:
 
 - [x] Crear repositorio GitHub.
 - [x] Agregar integrantes.
-- [ ] Crear ramas `main` y `develop`.
+- [x] Crear ramas `main` y `develop`.
 - [x] Crear `.gitignore`.
-- [ ] Crear README.
+- [x] Crear README.
 - [x] Confirmar tecnologías.
 - [x] Confirmar modelo relacional.
 
