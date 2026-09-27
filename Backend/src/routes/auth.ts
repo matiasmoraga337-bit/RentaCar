@@ -10,6 +10,8 @@ import { sendPasswordResetEmail, sendVerificationEmail } from '../services/mail.
 
 const router = Router();
 
+const dummyPasswordHash = bcrypt.hash(randomBytes(16).toString('hex'), 12);
+
 interface RegisterBody {
   rut?: string;
   nombres?: string;
@@ -282,12 +284,14 @@ router.post('/login', async (request, response, next) => {
     const user = result.recordset[0];
 
     if (!user || !user.activo_usuario) {
+      await bcrypt.compare(password, await dummyPasswordHash);
       response.status(401).json({ message: 'Credenciales invalidas.' });
       return;
     }
 
     if (!user.email_confirmado_usuario) {
-      response.status(403).json({ message: 'Confirma tu correo antes de iniciar sesion.' });
+      await bcrypt.compare(password, await dummyPasswordHash);
+      response.status(401).json({ message: 'Credenciales invalidas.' });
       return;
     }
 

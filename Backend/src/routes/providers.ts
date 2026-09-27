@@ -17,7 +17,6 @@ const router = Router();
 
 interface ProviderBody {
   tipo?: 'PERSONA' | 'EMPRESA';
-  idPersona?: number;
   nombreComercial?: string;
   razonSocial?: string;
   rutProveedor?: string;
@@ -58,9 +57,9 @@ router.post('/', authenticateToken, async (request, response, next) => {
         return;
       }
 
-      let personId = body.idPersona ?? null;
+      let personId: number | null = null;
 
-      if (type === 'PERSONA' && !personId) {
+      if (type === 'PERSONA') {
         const personResult = await transaction
           .request()
           .input('userId', sql.Int, request.user!.id)
@@ -107,6 +106,23 @@ router.post('/', authenticateToken, async (request, response, next) => {
             ID_proveedor_configuracion_proveedor
           )
           VALUES (@providerId);
+
+          IF NOT EXISTS (
+            SELECT 1
+            FROM UsuarioRol ur
+            INNER JOIN Rol r ON r.ID_rol = ur.ID_rol_usuario_rol
+            WHERE ur.ID_usuario_usuario_rol = @userId
+              AND r.nombre_rol = 'PROVEEDOR'
+          )
+          BEGIN
+            INSERT INTO UsuarioRol (
+              ID_usuario_usuario_rol,
+              ID_rol_usuario_rol
+            )
+            SELECT @userId, ID_rol
+            FROM Rol
+            WHERE nombre_rol = 'PROVEEDOR';
+          END
         `);
 
       await transaction.commit();
