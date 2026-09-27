@@ -69,6 +69,19 @@ export function ProfilePage() {
     }
   }
 
+  async function handlePayNow(reservationId: number) {
+    setPageError('');
+    try {
+      const payment = await apiRequest<{ redirectUrl: string }>('/pagos/simulados/iniciar', {
+        method: 'POST',
+        body: JSON.stringify({ reservationId }),
+      });
+      navigate(payment.redirectUrl);
+    } catch (error) {
+      setPageError(error instanceof Error ? error.message : 'No fue posible iniciar el pago.');
+    }
+  }
+
   async function handleReview(event: FormEvent<HTMLFormElement>, arriendoId: number) {
     event.preventDefault();
     setSubmitting(true);
@@ -221,8 +234,15 @@ export function ProfilePage() {
                   { label: 'Pago', value: `${reservation.nombre_estado_pago ?? 'Sin pago'}${reservation.monto_pago ? ` · $${Number(reservation.monto_pago).toLocaleString('es-CL')}` : ''}` },
                   ...(reservation.estado_arriendo ? [{ label: 'Arriendo', value: reservation.estado_arriendo }] : []),
                 ]}
-                actions={canCancel(reservation) ? (
-                  <button className="button button-outline button-small" onClick={() => handleCancel(reservation.ID_reserva)}>Cancelar reserva</button>
+                actions={canCancel(reservation) || reservation.nombre_estado_reserva === 'PENDIENTE' ? (
+                  <>
+                    {reservation.nombre_estado_reserva === 'PENDIENTE' && (
+                      <button className="button button-primary button-small" onClick={() => handlePayNow(reservation.ID_reserva)}>Pagar ahora</button>
+                    )}
+                    {canCancel(reservation) && (
+                      <button className="button button-outline button-small" onClick={() => handleCancel(reservation.ID_reserva)}>Cancelar reserva</button>
+                    )}
+                  </>
                 ) : undefined}
               >
                 {canReview(reservation) && (

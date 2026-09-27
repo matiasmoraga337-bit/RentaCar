@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../context/useAuth';
 import { apiRequest, assetUrl } from '../services/api';
@@ -33,11 +33,12 @@ interface VehicleReviews {
 export function VehicleDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [detail, setDetail] = useState<VehicleDetail | null>(null);
   const [reviews, setReviews] = useState<VehicleReviews | null>(null);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(searchParams.get('inicio') ?? '');
+  const [endDate, setEndDate] = useState(searchParams.get('fin') ?? '');
   const [pickupBranchId, setPickupBranchId] = useState('');
   const [returnBranchId, setReturnBranchId] = useState('');
   const [message, setMessage] = useState('');
@@ -121,6 +122,9 @@ export function VehicleDetailPage() {
   const mainPhotoUrl = selectedPhoto ?? fotos[0]?.url_foto_vehiculo ?? null;
   const days = calculateDays();
   const total = days * Number(vehicle.precio_diario_base_vehiculo);
+  const today = new Date().toISOString().split('T')[0];
+  const minStartDate = today;
+  const minEndDate = startDate > today ? startDate : today;
   const pickupBranches = detail.branches.filter((branch) => branch.disponible_para_entrega);
   const returnBranches = detail.branches.filter((branch) =>
     branch.disponible_para_devolucion
@@ -172,8 +176,8 @@ export function VehicleDetailPage() {
           {user ? (
             <form className="reservation-form" onSubmit={handleReserve}>
               <h2>Reserva tu vehículo</h2>
-              <label>Fecha de retiro<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required /></label>
-              <label>Fecha de devolución<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></label>
+              <label>Fecha de retiro<input type="date" min={minStartDate} value={startDate} onChange={(event) => setStartDate(event.target.value)} required /></label>
+              <label>Fecha de devolución<input type="date" min={minEndDate} value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></label>
               <label>Sede de retiro
                 <select value={pickupBranchId} onChange={(event) => {
                   const nextPickup = event.target.value;
