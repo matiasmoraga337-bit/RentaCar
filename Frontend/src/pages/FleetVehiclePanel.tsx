@@ -26,16 +26,33 @@ interface Movement {
   sede_destino: string | null;
 }
 
+interface VehicleCatalogs {
+  models: { ID_modelo: number; nombre_modelo: string }[];
+  types: { ID_tipo_vehiculo: number; nombre_tipo_vehiculo: string }[];
+  fuels: { ID_tipo_combustible: number; nombre_tipo_combustible: string }[];
+  transmissions: { ID_tipo_transmision: number; nombre_tipo_transmision: string }[];
+}
+
 interface Props {
   providerId: number;
-  vehicle: { ID_vehiculo: number; patente_vehiculo: string; nombre_marca: string; nombre_modelo: string };
+  vehicle: {
+    ID_vehiculo: number;
+    patente_vehiculo: string;
+    nombre_marca: string;
+    nombre_modelo: string;
+    anio_vehiculo: number;
+    kilometraje_vehiculo: number;
+    precio_diario_base_vehiculo: number;
+    nombre_estado_publicacion_vehiculo: string;
+  };
   branches: Branch[];
+  catalogs: VehicleCatalogs;
 }
 
 const MAX_PHOTO_COUNT = 10;
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
-export function FleetVehiclePanel({ providerId, vehicle, branches }: Props) {
+export function FleetVehiclePanel({ providerId, vehicle, branches, catalogs }: Props) {
   const [vehicleBranches, setVehicleBranches] = useState<VehicleBranch[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
   const [photos, setPhotos] = useState<VehiclePhoto[]>([]);
@@ -49,6 +66,17 @@ export function FleetVehiclePanel({ providerId, vehicle, branches }: Props) {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [editForm, setEditForm] = useState({
+    idModelo: '',
+    idTipoVehiculo: '',
+    idTipoCombustible: '',
+    idTipoTransmision: '',
+    anio: String(vehicle.anio_vehiculo ?? ''),
+    kilometraje: String(vehicle.kilometraje_vehiculo ?? ''),
+    precioDiario: String(vehicle.precio_diario_base_vehiculo ?? ''),
+  });
+  const [editBusy, setEditBusy] = useState(false);
+  const [editMessage, setEditMessage] = useState('');
 
   function load() {
     Promise.all([
@@ -106,6 +134,47 @@ export function FleetVehiclePanel({ providerId, vehicle, branches }: Props) {
 
   function removePendingPhoto(index: number) {
     setPending(pendingFiles.filter((_, photoIndex) => photoIndex !== index));
+  }
+
+  function updateEditField(field: keyof typeof editForm, value: string) {
+    setEditForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleEditSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setEditBusy(true);
+    setEditMessage('');
+    setError('');
+
+    const body: Record<string, number> = {};
+    if (editForm.idModelo) body.idModelo = Number(editForm.idModelo);
+    if (editForm.idTipoVehiculo) body.idTipoVehiculo = Number(editForm.idTipoVehiculo);
+    if (editForm.idTipoCombustible) body.idTipoCombustible = Number(editForm.idTipoCombustible);
+    if (editForm.idTipoTransmision) body.idTipoTransmision = Number(editForm.idTipoTransmision);
+    if (editForm.anio) body.anio = Number(editForm.anio);
+    if (editForm.kilometraje) body.kilometraje = Number(editForm.kilometraje);
+    if (editForm.precioDiario) body.precioDiario = Number(editForm.precioDiario);
+
+    if (Object.keys(body).length === 0) {
+      setError('No hay campos que actualizar.');
+      setEditBusy(false);
+      return;
+    }
+
+    try {
+      await apiRequest(`/proveedores/${providerId}/vehiculos/${vehicle.ID_vehiculo}`, {
+        method: 'PATCH',
+        body: JSON.stringify(body),
+      });
+      const republished = vehicle.nombre_estado_publicacion_vehiculo === 'PUBLICADO'
+        ? ' Como estaba publicado, quedará pendiente de republicación.' 
+        : '';
+      setEditMessage(`Vehículo actualizado.${republished}`);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible editar el vehículo.');
+    } finally {
+      setEditBusy(false);
+    }
   }
 
   async function handlePhotosSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -244,6 +313,45 @@ export function FleetVehiclePanel({ providerId, vehicle, branches }: Props) {
         <strong>Gestión de {vehicle.nombre_marca} {vehicle.nombre_modelo}</strong>
         <span className="reservation-plate">{vehicle.patente_vehiculo}</span>
       </div>
+
+      <form className="branch-form" onSubmit={handleEditSubmit}>
+        <h4>Editar datos del vehículo</h4>
+        <div className="fleet-edit-grid">
+          <label>
+            Modelo <small>(opcional)</small>
+            <select value={editForm.idModelo} onChange={(event) => updateEditField('idModelo', event.target.value)}>
+              <option value="">Sin cambio</option>
+              {catalogs.models.map((model) => <option key={model.ID_modelo} value={model.ID_modelo}>{model.nombre_modelo}</option>)}
+            </select>
+          </label>
+          <label>
+            Tipo de vehículo <small>(opcional)</small>
+            <select value={editForm.idTipoVehiculo} onChange={(event) => updateEditField('idTipoVehiculo', event.target.value)}>
+              <option value="">Sin cambio</option>
+              {catalogs.types.map((type) => <option key={type.ID_tipo_vehiculo} value={type.ID_tipo_vehiculo}>{type.nombre_tipo_vehiculo}</option>)}
+            </select>
+          </label>
+          <label>
+            Combustible <small>(opcional)</small>
+            <select value={editForm.idTipoCombustible} onChange={(event) => updateEditField('idTipoCombustible', event.target.value)}>
+              <option value="">Sin cambio</option>
+              {catalogs.fuels.map((fuel) => <option key={fuel.ID_tipo_combustible} value={fuel.ID_tipo_combustible}>{fuel.nombre_tipo_combustible}</option>)}
+            </select>
+          </label>
+          <label>
+            Transmisión <small>(opcional)</small>
+            <select value={editForm.idTipoTransmision} onChange={(event) => updateEditField('idTipoTransmision', event.target.value)}>
+              <option value="">Sin cambio</option>
+              {catalogs.transmissions.map((transmission) => <option key={transmission.ID_tipo_transmision} value={transmission.ID_tipo_transmision}>{transmission.nombre_tipo_transmision}</option>)}
+            </select>
+          </label>
+        </div>
+        <label>Año<input type="number" value={editForm.anio} onChange={(event) => updateEditField('anio', event.target.value)} min="1950" max="2100" /></label>
+        <label>Kilometraje<input type="number" value={editForm.kilometraje} onChange={(event) => updateEditField('kilometraje', event.target.value)} min="0" /></label>
+        <label>Precio diario<input type="number" value={editForm.precioDiario} onChange={(event) => updateEditField('precioDiario', event.target.value)} min="1" /></label>
+        {editMessage && <p className="success-message" role="status">{editMessage}</p>}
+        <button className="button button-quiet button-full" disabled={editBusy}>{editBusy ? 'Guardando...' : 'Guardar cambios'}</button>
+      </form>
 
       <div className="fleet-manager-grid">
         <div>

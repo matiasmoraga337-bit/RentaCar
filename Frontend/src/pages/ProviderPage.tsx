@@ -3,6 +3,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { PageHeader } from '../components/PageHeader';
 import { SectionHeading } from '../components/SectionHeading';
 import { apiRequest, apiUpload } from '../services/api';
+import { useAuth } from '../context/useAuth';
 import { FleetVehiclePanel } from './FleetVehiclePanel';
 
 interface Provider {
@@ -33,7 +34,10 @@ interface ProviderVehicle {
   patente_vehiculo: string;
   nombre_marca: string;
   nombre_modelo: string;
+  anio_vehiculo: number;
+  kilometraje_vehiculo: number;
   precio_diario_base_vehiculo: number;
+  nombre_estado_vehiculo: string;
   nombre_estado_publicacion_vehiculo: string;
   url_foto_principal?: string | null;
 }
@@ -55,11 +59,21 @@ interface ProviderReport {
   promedio_resenas: number | null;
 }
 
+interface TeamMember {
+  ID_usuario: number;
+  email_usuario: string;
+  activo_usuario: boolean;
+  nombre: string;
+  es_administrador: boolean;
+  fecha_vinculacion: string;
+}
+
 function fetchProviders() {
   return apiRequest<Provider[]>('/proveedores/me');
 }
 
 export function ProviderPage() {
+  const { user } = useAuth();
   const [providers, setProviders] = useState<Provider[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<number | null>(null);
   const [catalogs, setCatalogs] = useState<Catalogs | null>(null);
@@ -105,6 +119,20 @@ export function ProviderPage() {
   });
   const [vehiclePhotos, setVehiclePhotos] = useState<File[]>([]);
   const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
+  const [profileForm, setProfileForm] = useState({
+    nombreComercial: '',
+    razonSocial: '',
+    rutProveedor: '',
+    telefono: '',
+    email: '',
+  });
+  const [profileMessage, setProfileMessage] = useState('');
+  const [profileSubmitting, setProfileSubmitting] = useState(false);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [teamEmail, setTeamEmail] = useState('');
+  const [teamMessage, setTeamMessage] = useState('');
+  const [teamSubmitting, setTeamSubmitting] = useState(false);
+  const [teamBusyId, setTeamBusyId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchProviders()
@@ -123,17 +151,29 @@ export function ProviderPage() {
       apiRequest<Catalogs>('/catalogos/vehiculos'),
       apiRequest<ProviderConfig>(`/proveedores/${selectedProvider}/configuracion`),
       apiRequest<ProviderReport>(`/proveedores/${selectedProvider}/reporte`),
+      apiRequest<TeamMember[]>(`/proveedores/${selectedProvider}/usuarios`),
     ])
-      .then(([branchResult, vehicleResult, catalogResult, configResult, reportResult]) => {
+      .then(([branchResult, vehicleResult, catalogResult, configResult, reportResult, teamResult]) => {
+        const current = providers.find((item) => item.ID_proveedor === selectedProvider);
+        if (current) {
+          setProfileForm({
+            nombreComercial: current.nombre_comercial_proveedor,
+            razonSocial: current.razon_social_proveedor ?? '',
+            rutProveedor: current.rut_proveedor ?? '',
+            telefono: '',
+            email: '',
+          });
+        }
         setBranches(branchResult);
         setVehicles(vehicleResult);
         setCatalogs(catalogResult);
         setProviderConfig(configResult);
         setProviderReport(reportResult);
+        setTeam(teamResult);
         setExpandedVehicle(null);
       })
       .catch((requestError: Error) => setError(requestError.message));
-  }, [selectedProvider]);
+  }, [selectedProvider, providers]);
 
   useEffect(() => {
     return () => {
@@ -190,6 +230,97 @@ export function ProviderPage() {
 
   function updateBranchField(field: keyof typeof branchForm, value: string) {
     setBranchForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateProfileField(field: keyof typeof profileForm, value: string) {
+    setProfileForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleProfileSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProvider) return;
+
+    setProfileSubmitting(true);
+    setProfileMessage('');
+    setError('');
+    try {
+      await apiRequest(`/proveedores/${selectedProvider}/perfil`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          nombreComercial: profileForm.nombreComercial,
+          razonSocial: profileForm.razonSocial || null,
+          rutProveedor: profileForm.rutProveedor || null,
+          telefono: profileForm.telefono || null,
+          email: profileForm.email || null,
+        }),
+      });
+      setProfileMessage('Perfil del proveedor actualizado.');
+      setProviders(await fetchProviders());
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar el perfil.');
+    } finally {
+      setProfileSubmitting(false);
+    }
+  }
+
+  async function handleAddMember(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedProvider) return;
+
+    setTeamSubmitting(true);
+    setTeamMessage('');
+    setError('');
+    try {
+      await apiRequest(`/proveedores/${selectedProvider}/usuarios`, {
+        method: 'POST',
+        body: JSON.stringify({ email: teamEmail }),
+      });
+      setTeamMessage('Usuario asociado al proveedor.');
+      setTeamEmail('');
+      setTeam(await apiRequest<TeamMember[]>(`/proveedores/${selectedProvider}/usuarios`));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible asociar al usuario.');
+    } finally {
+      setTeamSubmitting(false);
+    }
+  }
+
+  async function handleToggleAdmin(member: TeamMember) {
+    if (!selectedProvider) return;
+    setTeamBusyId(member.ID_usuario);
+    setTeamMessage('');
+    setError('');
+    try {
+      await apiRequest(`/proveedores/${selectedProvider}/usuarios/${member.ID_usuario}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ esAdministrador: !member.es_administrador }),
+      });
+      setTeamMessage(member.es_administrador ? 'Ya no es administrador del proveedor.' : 'Ahora es administrador del proveedor.');
+      setTeam(await apiRequest<TeamMember[]>(`/proveedores/${selectedProvider}/usuarios`));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible cambiar el rol.');
+    } finally {
+      setTeamBusyId(null);
+    }
+  }
+
+  async function handleRemoveMember(member: TeamMember) {
+    if (!selectedProvider) return;
+    if (!window.confirm(`¿Desvincular a ${member.nombre} de este proveedor?`)) return;
+    setTeamBusyId(member.ID_usuario);
+    setTeamMessage('');
+    setError('');
+    try {
+      await apiRequest(`/proveedores/${selectedProvider}/usuarios/${member.ID_usuario}`, {
+        method: 'DELETE',
+      });
+      setTeamMessage('Usuario desvinculado del proveedor.');
+      setTeam(await apiRequest<TeamMember[]>(`/proveedores/${selectedProvider}/usuarios`));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible desvincular al usuario.');
+    } finally {
+      setTeamBusyId(null);
+    }
   }
 
   async function handleConfigSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -316,6 +447,9 @@ export function ProviderPage() {
     }
   }
 
+  const selectedInfo = providers.find((item) => item.ID_proveedor === selectedProvider);
+  const canManageTeam = Boolean(selectedInfo?.es_administrador_proveedor_usuario || user?.roles.includes('ADMIN'));
+
   return (
     <main className="provider-page">
       <PageHeader
@@ -419,6 +553,75 @@ export function ProviderPage() {
                   <div><strong>{providerReport.promedio_resenas ?? '—'}</strong><span>Reseña promedio</span></div>
                 </div>
               </section>}
+
+              {selectedInfo && (
+                <form className="branch-form" onSubmit={handleProfileSubmit}>
+                  <h3>Datos del proveedor</h3>
+                  <label>
+                    Nombre comercial
+                    <input value={profileForm.nombreComercial} onChange={(event) => updateProfileField('nombreComercial', event.target.value)} required />
+                  </label>
+                  <label>
+                    Razón social <small>(solo empresas; los campos vacíos se conservan)</small>
+                    <input value={profileForm.razonSocial} onChange={(event) => updateProfileField('razonSocial', event.target.value)} />
+                  </label>
+                  <label>
+                    RUT
+                    <input value={profileForm.rutProveedor} onChange={(event) => updateProfileField('rutProveedor', event.target.value)} />
+                  </label>
+                  <label>
+                    Teléfono
+                    <input value={profileForm.telefono} onChange={(event) => updateProfileField('telefono', event.target.value)} />
+                  </label>
+                  <label>
+                    Correo de contacto
+                    <input type="email" value={profileForm.email} onChange={(event) => updateProfileField('email', event.target.value)} />
+                  </label>
+                  {profileMessage && <p className="success-message" role="status">{profileMessage}</p>}
+                  <button className="button button-quiet button-full" disabled={profileSubmitting}>{profileSubmitting ? 'Guardando...' : 'Guardar perfil'}</button>
+                </form>
+              )}
+
+              {selectedInfo && (
+                <section className="branch-form">
+                  <h3>Equipo de trabajo</h3>
+                  {team.length === 0 ? (
+                    <p className="empty-copy">Sin miembros asociados todavía.</p>
+                  ) : (
+                    <ul className="fleet-branch-list">
+                      {team.map((member) => (
+                        <li key={member.ID_usuario}>
+                          <div>
+                            <strong>{member.nombre}</strong>
+                            <span>{member.email_usuario} · {member.es_administrador ? 'Administrador' : 'Colaborador'}{!member.activo_usuario ? ' · Inactivo' : ''}</span>
+                          </div>
+                          {canManageTeam && (
+                            <div className="fleet-item-actions">
+                              <button className="button button-outline button-small" disabled={teamBusyId === member.ID_usuario} onClick={() => void handleToggleAdmin(member)}>
+                                {member.es_administrador ? 'Quitar admin' : 'Hacer admin'}
+                              </button>
+                              {member.ID_usuario !== user?.id && (
+                                <button className="button button-outline button-small" disabled={teamBusyId === member.ID_usuario} onClick={() => void handleRemoveMember(member)}>Desvincular</button>
+                              )}
+                            </div>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {canManageTeam && (
+                    <form onSubmit={handleAddMember}>
+                      <label>
+                        Correo del usuario a asociar
+                        <input type="email" value={teamEmail} onChange={(event) => setTeamEmail(event.target.value)} placeholder="usuario@correo.cl" required />
+                      </label>
+                      {teamMessage && <p className="success-message" role="status">{teamMessage}</p>}
+                      <button className="button button-quiet button-full" disabled={teamSubmitting}>{teamSubmitting ? 'Asociando...' : 'Asociar usuario'}</button>
+                    </form>
+                  )}
+                </section>
+              )}
+
               <form className="branch-form" onSubmit={handleBranchSubmit}>
                 <h3>Nueva sede</h3>
                 <label>
@@ -520,7 +723,7 @@ export function ProviderPage() {
                     </div>
                   </article>
                   {expandedVehicle === vehicle.ID_vehiculo && selectedProvider && (
-                    <FleetVehiclePanel providerId={selectedProvider} vehicle={vehicle} branches={branches} />
+                    <FleetVehiclePanel providerId={selectedProvider} vehicle={vehicle} branches={branches} catalogs={catalogs} />
                   )}
                 </Fragment>
               ))}
