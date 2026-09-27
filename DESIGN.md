@@ -75,31 +75,29 @@ No se utilizará ORM. Todas las operaciones de base de datos usarán SQL nativo 
 
 ```text
 rentacar/
-├── frontend/
+├── Frontend/
 │   ├── src/
 │   │   ├── components/
 │   │   ├── context/
-│   │   ├── layouts/
 │   │   ├── pages/
-│   │   ├── routes/
 │   │   └── services/
 │   ├── package.json
 │   └── package-lock.json
-├── backend/
+├── Backend/
+│   ├── scripts/            <!-- setup, seed y suites de prueba -->
 │   ├── src/
-│   │   ├── config/
-│   │   ├── controllers/
-│   │   ├── database/
 │   │   ├── middlewares/
 │   │   ├── routes/
 │   │   ├── services/
-│   │   ├── validators/
+│   │   ├── db.ts
 │   │   └── server.ts
 │   ├── package.json
 │   └── package-lock.json
-├── database/
-│   └── RentaCarDB.sql
+├── migrations/             <!-- migraciones incrementales SQL -->
+├── RentaCarDB.sql          <!-- esquema completo desde cero -->
 ├── docs/
+│   ├── API.md
+│   └── MODELO_RELACIONAL.md
 ├── docker-compose.yml
 ├── .env.example
 ├── .gitignore
@@ -108,6 +106,10 @@ rentacar/
 ├── PLAN_DESARROLLO_GITHUB.md
 └── README.md
 ```
+
+El backend (y el frontend) se llevan en carpetas capitalizadas dentro del
+mismo repositorio; el gemelo técnico de este diseño era `frontend/`,
+`backend/` y `database/`, nombres que la entrega actual no utiliza.
 
 ## 5. Roles y autorización
 
@@ -258,49 +260,71 @@ sp_CrearResena
 
 ## 9. API
 
+Listado completo en `docs/API.md`. Las rutas protegidas requieren
+`Authorization: Bearer <jwt>`.
+
 ### Autenticación
 
 ```text
 POST /api/auth/registro
 POST /api/auth/login
+POST /api/auth/refresh
+POST /api/auth/logout
 GET  /api/auth/perfil
+PATCH /api/auth/perfil
+GET  /api/auth/confirmar-cuenta?token=...
 ```
 
-### Vehículos
+### Vehículos y catálogo
 
 ```text
 GET   /api/vehiculos
 GET   /api/vehiculos/:id
-POST  /api/proveedores/:id/vehiculos
-PUT   /api/vehiculos/:id
+GET   /api/vehiculos/:id/resenas
 PATCH /api/vehiculos/:id/publicacion
+GET   /api/catalogos/vehiculos
 ```
 
-### Reservas y arriendos
+La edición y creación de vehículos se expone dentro del contexto del
+proveedor (`/api/proveedores/:id/vehiculos...`).
+
+### Reservas, arriendos y reseñas
 
 ```text
 POST  /api/reservas
 GET   /api/reservas/mis-reservas
 GET   /api/reservas/:id
 PATCH /api/reservas/:id/cancelar
-POST  /api/arriendos
-PATCH /api/arriendos/:id/retiro
-PATCH /api/arriendos/:id/devolucion
+POST  /api/arriendos            (inicia el arriendo / retiro)
+POST  /api/arriendos/:id/devolucion
+POST  /api/arriendos/:id/resenas
+GET   /api/arriendos
 ```
 
-### Pagos y reseñas
+### Pagos
 
 ```text
-POST /api/reservas/:id/pagos
+POST /api/pagos/simulados/iniciar
+POST /api/pagos/simulados/:token/confirmar
 GET  /api/reservas/:id/pagos
-POST /api/arriendos/:id/resena
-PUT  /api/resenas/:id/moderacion
+```
+
+### Moderación y administración
+
+```text
+PATCH /api/admin/resenas/:id
+GET   /api/admin/resenas
+PATCH /api/admin/proveedores/:id/estado
+PATCH /api/admin/vehiculos/:id/publicacion
+GET   /api/admin/resumen
+GET   /api/admin/reportes/proveedores
+GET   /api/admin/reportes/tipos-proveedor
 ```
 
 ### Propuesta pendiente: Estados de resena
 
 La moderación de reseñas funciona hoy con el bit `Resena.activo_resena`
-(`PATCH /admin/resenas/:id` con `{ visible }`). Como evolución de producto se
+(`PATCH /admin/resenas/:id` con `{ activo }`). Como evolución de producto se
 propone reemplazar dicho bit por un modelo de estados explícito:
 
 - Tabla `EstadoResena` con `PENDIENTE`, `APROBADA` y `RECHAZADA`.

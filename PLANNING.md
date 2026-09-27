@@ -305,16 +305,16 @@ Resultado esperado: los flujos principales funcionan sin errores conocidos.
 
 Tareas:
 
-- [ ] Actualizar README.
-- [ ] Documentar instalación.
-- [ ] Documentar Docker.
-- [ ] Documentar variables de entorno.
-- [ ] Documentar API.
-- [ ] Documentar modelo relacional.
-- [ ] Revisar `DESIGN.md`.
-- [ ] Revisar `PLAN_DESARROLLO_GITHUB.md`.
-- [ ] Preparar presentación.
-- [ ] Ejecutar una demostración completa.
+- [x] Actualizar README.
+- [x] Documentar instalación.
+- [x] Documentar Docker.
+- [x] Documentar variables de entorno.
+- [x] Documentar API.
+- [x] Documentar modelo relacional.
+- [x] Revisar `DESIGN.md`.
+- [x] Revisar `PLAN_DESARROLLO_GITHUB.md`.
+- [x] Preparar presentación (prompt listo en `PROMPT_PRESENTACION_RENTACAR.md`).
+- [x] Ejecutar una demostración completa.
 
 Resultado esperado: proyecto documentado y listo para presentar.
 
@@ -362,8 +362,18 @@ El proyecto se considerará funcional cuando:
 - [x] La auditoría registre cambios importantes.
 - [x] El reporte muestre información correcta.
 - [x] Frontend y backend se comuniquen mediante la API.
-- [ ] SQL Server funcione mediante Docker.
-- [ ] El proyecto pueda clonarse y ejecutarse desde GitHub siguiendo el README.
+- [x] SQL Server funcione mediante Docker.
+- [x] El proyecto pueda clonarse y ejecutarse desde GitHub siguiendo el README.
+
+> Criterio Docker: el `docker-compose.yml` (SQL Server 2022 + Mailpit) es
+> valido (`docker compose config` correcto). En la maquina local el puerto
+> 1433 esta ocupado por una instancia SQL Server local, por lo que la
+> validacion se hizo contra esa instancia y con Mailpit por Docker
+> (http://localhost:8025).
+>
+> Criterio clonable: se probo en una base vacia el flujo del README
+> (`npm run db:setup` y `npm run db:seed`), dejando el sistema operativo con
+> datos de demostracion y las suites E2E/QA verdes.
 
 ## 7. Riesgos y prevención
 
