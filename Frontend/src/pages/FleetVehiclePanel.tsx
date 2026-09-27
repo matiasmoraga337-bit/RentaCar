@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
-import { apiRequest } from '../services/api';
+import { apiRequest, apiUpload, assetUrl } from '../services/api';
+import type { VehiclePhoto } from '../types/vehicle';
 
 interface Branch {
   ID_sede_proveedor: number;
@@ -31,9 +32,15 @@ interface Props {
   branches: Branch[];
 }
 
+const MAX_PHOTO_COUNT = 10;
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
 export function FleetVehiclePanel({ providerId, vehicle, branches }: Props) {
   const [vehicleBranches, setVehicleBranches] = useState<VehicleBranch[]>([]);
   const [movements, setMovements] = useState<Movement[]>([]);
+  const [photos, setPhotos] = useState<VehiclePhoto[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingPreviews, setPendingPreviews] = useState<string[]>([]);
   const [newSede, setNewSede] = useState('');
   const [delivery, setDelivery] = useState(true);
   const [returns, setReturns] = useState(true);
@@ -47,15 +54,117 @@ export function FleetVehiclePanel({ providerId, vehicle, branches }: Props) {
     Promise.all([
       apiRequest<VehicleBranch[]>(`/proveedores/${providerId}/vehiculos/${vehicle.ID_vehiculo}/sedes`),
       apiRequest<Movement[]>(`/proveedores/${providerId}/vehiculos/${vehicle.ID_vehiculo}/movimientos`),
+      apiRequest<VehiclePhoto[]>(`/proveedores/${providerId}/vehiculos/${vehicle.ID_vehiculo}/fotos`),
     ])
-      .then(([branchResult, movementResult]) => {
+      .then(([branchResult, movementResult, photoResult]) => {
         setVehicleBranches(branchResult);
         setMovements(movementResult);
+        setPhotos(photoResult);
       })
       .catch((requestError: Error) => setError(requestError.message));
   }
 
   useEffect(load, [providerId, vehicle.ID_vehiculo]);
+
+  useEffect(() => {
+    return () => {
+      pendingPreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [pendingPreviews]);
+
+  function setPending(files: File[]) {
+    setPendingFiles(files);
+    setPendingPreviews((current) => {
+      current.forEach((url) => URL.revokeObjectURL(url));
+      return files.map((file) => URL.createObjectURL(file));
+    });
+  }
+
+  function handlePhotoFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? []);
+    const next = [...pendingFiles];
+
+    for (const file of selected) {
+      if (file.type !== 'image/png') {
+        setError('Solo se permiten imagenes PNG.');
+        continue;
+      }
+      if (file.size > MAX_PHOTO_BYTES) {
+        setError('Cada foto debe pesar maximo 5 MB.');
+        continue;
+      }
+      if (next.length + photos.length >= MAX_PHOTO_COUNT) {
+        setError(`Maximo ${MAX_PHOTO_COUNT} fotos por vehiculo.`);
+        break;
+      }
+      next.push(file);
+    }
+
+    setPending(next);
+    event.target.value = '';
+  }
+
+  function removePendingPhoto(index: number) {
+    setPending(pendingFiles.filter((_, photoIndex) => photoIndex !== index));
+  }
+
+  async function handlePhotosSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (pendingFiles.length === 0) return;
+
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      const formData = new FormData();
+      pendingFiles.forEach((file) => formData.append('fotos', file));
+      await apiUpload<{ fotos: VehiclePhoto[] }>(
+        `/proveedores/${providerId}/vehiculos/${vehicle.ID_vehiculo}/fotos`,
+        formData,
+      );
+      setMessage('Fotos subidas.');
+      setPending([]);
+      load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible subir las fotos.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSetPrincipal(photoId: number) {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await apiRequest(`/proveedores/${providerId}/vehiculos/${vehicle.ID_vehiculo}/fotos/${photoId}/principal`, {
+        method: 'PATCH',
+      });
+      setMessage('Foto principal actualizada.');
+      load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar la foto principal.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeletePhoto(photoId: number) {
+    setBusy(true);
+    setError('');
+    setMessage('');
+    try {
+      await apiRequest(`/proveedores/${providerId}/vehiculos/${vehicle.ID_vehiculo}/fotos/${photoId}`, {
+        method: 'DELETE',
+      });
+      setMessage('Foto eliminada.');
+      load();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible eliminar la foto.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const currentBranch = vehicleBranches.find((branch) => branch.es_actual === 1);
   const availableBranches = branches.filter(
@@ -209,6 +318,53 @@ export function FleetVehiclePanel({ providerId, vehicle, branches }: Props) {
             </ul>
           )}
         </div>
+      </div>
+
+      <div className="fleet-photos">
+        <h4>Fotos del vehículo</h4>
+        {photos.length === 0 ? (
+          <p className="empty-copy">Sin fotos todavía. La primera foto que subas será la principal.</p>
+        ) : (
+          <div className="fleet-photo-grid" role="group" aria-label="Fotos del vehículo">
+            {photos.map((photo) => (
+              <figure className="fleet-photo-item" key={photo.ID_foto_vehiculo}>
+                <img src={assetUrl(photo.url_foto_vehiculo)} alt={`Foto ${photo.ID_foto_vehiculo}`} />
+                <figcaption>
+                  {photo.es_principal_foto && <span className="fleet-photo-flag">Principal</span>}
+                  <div className="fleet-photo-actions">
+                    {!photo.es_principal_foto && (
+                      <button className="button button-outline button-small" disabled={busy} onClick={() => handleSetPrincipal(photo.ID_foto_vehiculo)}>Hacer principal</button>
+                    )}
+                    <button className="button button-outline button-small" disabled={busy} onClick={() => handleDeletePhoto(photo.ID_foto_vehiculo)}>Eliminar</button>
+                  </div>
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        )}
+
+        {photos.length < MAX_PHOTO_COUNT && (
+          <form className="branch-form" onSubmit={handlePhotosSubmit}>
+            <h4>Subir fotos</h4>
+            <label className="photo-field">
+              Archivo(s) PNG <small>(máx. 5 MB cada una)</small>
+              <input type="file" accept="image/png" multiple onChange={handlePhotoFiles} />
+            </label>
+            {pendingPreviews.length > 0 && (
+              <div className="photo-preview-grid" role="group" aria-label="Fotos por subir">
+                {pendingPreviews.map((url, index) => (
+                  <div className="photo-preview-item" key={url}>
+                    <img src={url} alt={`Foto ${index + 1}`} />
+                    <button type="button" className="photo-remove" onClick={() => removePendingPhoto(index)} aria-label={`Quitar foto ${index + 1}`}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button className="button button-quiet button-full" disabled={busy || pendingFiles.length === 0}>
+              {busy ? 'Subiendo...' : 'Subir fotos'}
+            </button>
+          </form>
+        )}
       </div>
 
       {message && <p className="success-message" role="status">{message}</p>}

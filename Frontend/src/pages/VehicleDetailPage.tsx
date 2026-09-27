@@ -2,18 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { useAuth } from '../context/useAuth';
-import { apiRequest } from '../services/api';
-
-interface Vehicle {
-  ID_vehiculo: number;
-  precio_diario_base_vehiculo: number;
-  nombre_comercial_proveedor: string;
-  nombre_marca: string;
-  nombre_modelo: string;
-  nombre_tipo_vehiculo: string;
-  nombre_comuna?: string | null;
-  nombre_region?: string | null;
-}
+import { apiRequest, assetUrl } from '../services/api';
+import type { Vehicle, VehiclePhoto } from '../types/vehicle';
 
 interface VehicleDetail {
   vehicle: Vehicle;
@@ -25,6 +15,7 @@ interface VehicleDetail {
     disponible_para_devolucion: boolean;
   }[];
   providerConfig: { permite_devolucion_otra_sede: boolean };
+  fotos: VehiclePhoto[];
 }
 
 interface VehicleReviews {
@@ -52,6 +43,7 @@ export function VehicleDetailPage() {
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -125,6 +117,8 @@ export function VehicleDetailPage() {
   }
 
   const { vehicle } = detail;
+  const fotos = detail.fotos ?? [];
+  const mainPhotoUrl = selectedPhoto ?? fotos[0]?.url_foto_vehiculo ?? null;
   const days = calculateDays();
   const total = days * Number(vehicle.precio_diario_base_vehiculo);
   const pickupBranches = detail.branches.filter((branch) => branch.disponible_para_entrega);
@@ -138,8 +132,36 @@ export function VehicleDetailPage() {
       <Link className="back-link" to="/vehiculos">← Volver al catálogo</Link>
       <section className="detail-layout">
         <div className="detail-visual">
-          <span>{vehicle.nombre_tipo_vehiculo}</span>
-          <div className="detail-car" />
+          {mainPhotoUrl ? (
+            <div className="detail-gallery">
+              <img
+                className="detail-photo-main"
+                src={assetUrl(mainPhotoUrl)}
+                alt={`${vehicle.nombre_marca} ${vehicle.nombre_modelo}`}
+              />
+              <span>{vehicle.nombre_tipo_vehiculo}</span>
+              {fotos.length > 1 && (
+                <div className="detail-thumbs" role="group" aria-label="Fotos del vehículo">
+                  {fotos.map((photo) => (
+                    <button
+                      key={photo.ID_foto_vehiculo}
+                      type="button"
+                      className={`detail-thumb${mainPhotoUrl === photo.url_foto_vehiculo ? ' detail-thumb-active' : ''}`}
+                      onClick={() => setSelectedPhoto(photo.url_foto_vehiculo)}
+                      aria-label="Mostrar foto"
+                    >
+                      <img src={assetUrl(photo.url_foto_vehiculo)} alt="" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              <span>{vehicle.nombre_tipo_vehiculo}</span>
+              <div className="detail-car" />
+            </>
+          )}
         </div>
         <div className="detail-content">
           <span className="vehicle-provider">{vehicle.nombre_comercial_proveedor}</span>

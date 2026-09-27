@@ -334,11 +334,32 @@ router.patch('/usuarios/:id/roles', async (request, response, next) => {
     response.status(400).json({ message: 'Roles invalidos.' });
     return;
   }
+  if (userId === request.user!.id && !roles.includes('ADMIN')) {
+    response.status(400).json({ message: 'No puedes quitarte el rol ADMIN.' });
+    return;
+  }
   try {
     const pool = await getDatabasePool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     try {
+      if (!roles.includes('ADMIN')) {
+        const admins = await transaction
+          .request()
+          .input('userId', sql.Int, userId)
+          .query(`
+            SELECT COUNT(*) AS total
+            FROM UsuarioRol ur
+            INNER JOIN Rol r ON r.ID_rol = ur.ID_rol_usuario_rol
+            WHERE r.nombre_rol = 'ADMIN'
+              AND ur.ID_usuario_usuario_rol <> @userId;
+          `);
+        if (admins.recordset[0].total === 0) {
+          await transaction.rollback();
+          response.status(400).json({ message: 'Debe existir al menos un administrador.' });
+          return;
+        }
+      }
       const roleResult = await transaction.request().query(`SELECT ID_rol, nombre_rol FROM Rol WHERE nombre_rol IN ('CLIENTE','PROVEEDOR','ADMIN');`);
       const roleIds = new Map(roleResult.recordset.map((role: { nombre_rol: string; ID_rol: number }) => [role.nombre_rol, role.ID_rol]));
       await transaction.request().input('userId', sql.Int, userId).query('DELETE FROM UsuarioRol WHERE ID_usuario_usuario_rol = @userId;');

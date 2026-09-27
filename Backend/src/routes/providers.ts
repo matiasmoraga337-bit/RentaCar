@@ -4,12 +4,19 @@ import { getDatabasePool, sql } from '../database/sql.js';
 import { authenticateToken, requireRoles } from '../middlewares/auth.js';
 import { assertProviderAccess } from '../middlewares/provider-access.js';
 import { parseId } from '../utils/id.js';
+import {
+  assetHttpPath,
+  discardInvalidPngFiles,
+  MAX_PHOTO_COUNT,
+  removeFileByUrl,
+  removeUploadedFiles,
+  uploadVehiclePhotos,
+} from '../config/uploads.js';
 
 const router = Router();
 
 interface ProviderBody {
   tipo?: 'PERSONA' | 'EMPRESA';
-  idPersona?: number;
   nombreComercial?: string;
   razonSocial?: string;
   rutProveedor?: string;
@@ -50,9 +57,9 @@ router.post('/', authenticateToken, async (request, response, next) => {
         return;
       }
 
-      let personId = body.idPersona ?? null;
+      let personId: number | null = null;
 
-      if (type === 'PERSONA' && !personId) {
+      if (type === 'PERSONA') {
         const personResult = await transaction
           .request()
           .input('userId', sql.Int, request.user!.id)
@@ -99,6 +106,23 @@ router.post('/', authenticateToken, async (request, response, next) => {
             ID_proveedor_configuracion_proveedor
           )
           VALUES (@providerId);
+
+          IF NOT EXISTS (
+            SELECT 1
+            FROM UsuarioRol ur
+            INNER JOIN Rol r ON r.ID_rol = ur.ID_rol_usuario_rol
+            WHERE ur.ID_usuario_usuario_rol = @userId
+              AND r.nombre_rol = 'PROVEEDOR'
+          )
+          BEGIN
+            INSERT INTO UsuarioRol (
+              ID_usuario_usuario_rol,
+              ID_rol_usuario_rol
+            )
+            SELECT @userId, ID_rol
+            FROM Rol
+            WHERE nombre_rol = 'PROVEEDOR';
+          END
         `);
 
       await transaction.commit();
@@ -255,7 +279,14 @@ router.get('/:id/vehiculos', authenticateToken, async (request, response, next) 
           m.nombre_marca,
           mo.nombre_modelo,
           ev.nombre_estado_vehiculo,
-          ep.nombre_estado_publicacion_vehiculo
+          ep.nombre_estado_publicacion_vehiculo,
+          (
+            SELECT TOP 1 f.url_foto_vehiculo
+            FROM VehiculoFoto f
+            WHERE f.ID_vehiculo_vehiculo_foto = v.ID_vehiculo
+              AND f.es_principal_foto = 1
+              AND f.activo_foto_vehiculo = 1
+          ) AS url_foto_principal
         FROM Vehiculo v
         INNER JOIN Modelo mo ON mo.ID_modelo = v.ID_modelo_vehiculo
         INNER JOIN Marca m ON m.ID_marca = mo.ID_marca_modelo
@@ -395,6 +426,312 @@ router.post('/:id/vehiculos', authenticateToken, async (request, response, next)
 
       await transaction.commit();
       response.status(201).json({ ID_vehiculo: vehicleId });
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:id/vehiculos/:vehicleId/fotos', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+
+  if (!providerId || !vehicleId) {
+    response.status(400).json({ message: 'Proveedor o vehiculo invalido.' });
+    return;
+  }
+
+  let files: Express.Multer.File[];
+  try {
+    files = await uploadVehiclePhotos(request, response);
+  } catch (error) {
+    next(error);
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
+      removeUploadedFiles(files);
+      return;
+    }
+
+    const vehicleResult = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('vehicleId', sql.Int, vehicleId)
+      .query(`
+        SELECT ID_vehiculo
+        FROM Vehiculo
+        WHERE ID_vehiculo = @vehicleId
+          AND ID_proveedor_vehiculo = @providerId;
+      `);
+
+    if (vehicleResult.recordset.length === 0) {
+      removeUploadedFiles(files);
+      response.status(404).json({ message: 'Vehiculo no encontrado.' });
+      return;
+    }
+
+    const validFiles = discardInvalidPngFiles(files);
+
+    if (validFiles.length !== files.length) {
+      removeUploadedFiles(validFiles);
+      response.status(400).json({ message: 'Solo se permiten imagenes PNG validas.' });
+      return;
+    }
+
+    const countResult = await pool
+      .request()
+      .input('vehicleId', sql.Int, vehicleId)
+      .query(`
+        SELECT COUNT(*) AS total
+        FROM VehiculoFoto
+        WHERE ID_vehiculo_vehiculo_foto = @vehicleId
+          AND activo_foto_vehiculo = 1;
+      `);
+
+    if (countResult.recordset[0].total + validFiles.length > MAX_PHOTO_COUNT) {
+      removeUploadedFiles(validFiles);
+      response.status(400).json({ message: `Maximo ${MAX_PHOTO_COUNT} fotos por vehiculo.` });
+      return;
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const hasNoPhotoYet = countResult.recordset[0].total === 0;
+      const inserted: Array<{ ID_foto_vehiculo: number; url_foto_vehiculo: string; es_principal_foto: boolean }> = [];
+
+      for (let index = 0; index < validFiles.length; index += 1) {
+        const file = validFiles[index];
+
+        const insertResult = await transaction
+          .request()
+          .input('vehicleId', sql.Int, vehicleId)
+          .input('url', sql.VarChar(500), assetHttpPath(file.filename))
+          .input('principal', sql.Bit, hasNoPhotoYet && index === 0)
+          .query(`
+            INSERT INTO VehiculoFoto
+            (
+              ID_vehiculo_vehiculo_foto,
+              url_foto_vehiculo,
+              es_principal_foto
+            )
+            OUTPUT INSERTED.ID_foto_vehiculo, INSERTED.url_foto_vehiculo, INSERTED.es_principal_foto
+            VALUES (@vehicleId, @url, @principal);
+          `);
+
+        inserted.push(insertResult.recordset[0]);
+      }
+
+      await transaction.commit();
+      response.status(201).json({ fotos: inserted });
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      removeUploadedFiles(validFiles);
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/:id/vehiculos/:vehicleId/fotos', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+
+  if (!providerId || !vehicleId) {
+    response.status(400).json({ message: 'Proveedor o vehiculo invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('vehicleId', sql.Int, vehicleId)
+      .query(`
+        SELECT
+          f.ID_foto_vehiculo,
+          f.url_foto_vehiculo,
+          f.es_principal_foto,
+          f.fecha_subida_foto
+        FROM VehiculoFoto f
+        INNER JOIN Vehiculo v
+          ON v.ID_vehiculo = f.ID_vehiculo_vehiculo_foto
+        WHERE f.ID_vehiculo_vehiculo_foto = @vehicleId
+          AND v.ID_proveedor_vehiculo = @providerId
+          AND f.activo_foto_vehiculo = 1
+        ORDER BY f.es_principal_foto DESC, f.fecha_subida_foto, f.ID_foto_vehiculo;
+      `);
+
+    response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/:id/vehiculos/:vehicleId/fotos/:photoId/principal', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+  const photoId = parseId(request.params.photoId);
+
+  if (!providerId || !vehicleId || !photoId) {
+    response.status(400).json({ message: 'Proveedor, vehiculo o foto invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('vehicleId', sql.Int, vehicleId)
+      .input('photoId', sql.Int, photoId)
+      .query(`
+        IF NOT EXISTS (
+          SELECT 1 FROM Vehiculo
+          WHERE ID_vehiculo = @vehicleId
+            AND ID_proveedor_vehiculo = @providerId
+        )
+        BEGIN
+          SELECT 0 AS ok, 'Vehiculo no encontrado.' AS message;
+        END
+        ELSE IF NOT EXISTS (
+          SELECT 1 FROM VehiculoFoto
+          WHERE ID_foto_vehiculo = @photoId
+            AND ID_vehiculo_vehiculo_foto = @vehicleId
+            AND activo_foto_vehiculo = 1
+        )
+        BEGIN
+          SELECT 0 AS ok, 'Foto no encontrada.' AS message;
+        END
+        ELSE
+        BEGIN
+          UPDATE VehiculoFoto
+          SET es_principal_foto = 0
+          WHERE ID_vehiculo_vehiculo_foto = @vehicleId
+            AND activo_foto_vehiculo = 1;
+
+          UPDATE VehiculoFoto
+          SET es_principal_foto = 1
+          WHERE ID_foto_vehiculo = @photoId
+            AND ID_vehiculo_vehiculo_foto = @vehicleId;
+
+          SELECT 1 AS ok, 'Foto principal actualizada.' AS message;
+        END
+      `);
+
+    const outcome = result.recordset[0];
+    if (outcome.ok !== 1) {
+      response.status(outcome.message === 'Vehiculo no encontrado.' ? 404 : 400).json({ message: outcome.message });
+      return;
+    }
+
+    response.json({ message: 'Foto principal actualizada.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id/vehiculos/:vehicleId/fotos/:photoId', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+  const photoId = parseId(request.params.photoId);
+
+  if (!providerId || !vehicleId || !photoId) {
+    response.status(400).json({ message: 'Proveedor, vehiculo o foto invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
+      return;
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const photoResult = await transaction
+        .request()
+        .input('providerId', sql.Int, providerId)
+        .input('vehicleId', sql.Int, vehicleId)
+        .input('photoId', sql.Int, photoId)
+        .query(`
+          SELECT f.ID_foto_vehiculo, f.url_foto_vehiculo, f.es_principal_foto
+          FROM VehiculoFoto f
+          INNER JOIN Vehiculo v
+            ON v.ID_vehiculo = f.ID_vehiculo_vehiculo_foto
+          WHERE f.ID_foto_vehiculo = @photoId
+            AND f.ID_vehiculo_vehiculo_foto = @vehicleId
+            AND v.ID_proveedor_vehiculo = @providerId
+            AND f.activo_foto_vehiculo = 1;
+        `);
+
+      const photo = photoResult.recordset[0];
+
+      if (!photo) {
+        await transaction.rollback();
+        response.status(404).json({ message: 'Foto no encontrada.' });
+        return;
+      }
+
+      await transaction
+        .request()
+        .input('photoId', sql.Int, photoId)
+        .query(`
+          UPDATE VehiculoFoto
+          SET activo_foto_vehiculo = 0
+          WHERE ID_foto_vehiculo = @photoId;
+        `);
+
+      if (photo.es_principal_foto) {
+        const remainingResult = await transaction
+          .request()
+          .input('vehicleId', sql.Int, vehicleId)
+          .input('photoId', sql.Int, photoId)
+          .query(`
+            SELECT TOP 1 ID_foto_vehiculo
+            FROM VehiculoFoto
+            WHERE ID_vehiculo_vehiculo_foto = @vehicleId
+              AND activo_foto_vehiculo = 1
+              AND ID_foto_vehiculo <> @photoId
+            ORDER BY fecha_subida_foto, ID_foto_vehiculo;
+          `);
+
+        if (remainingResult.recordset[0]) {
+          await transaction
+            .request()
+            .input('newPrincipal', sql.Int, remainingResult.recordset[0].ID_foto_vehiculo)
+            .query(`
+              UPDATE VehiculoFoto
+              SET es_principal_foto = 1
+              WHERE ID_foto_vehiculo = @newPrincipal;
+            `);
+        }
+      }
+
+      await transaction.commit();
+      removeFileByUrl(photo.url_foto_vehiculo);
+
+      response.json({ message: 'Foto eliminada.', id: photo.ID_foto_vehiculo });
     } catch (error) {
       await transaction.rollback().catch(() => undefined);
       throw error;

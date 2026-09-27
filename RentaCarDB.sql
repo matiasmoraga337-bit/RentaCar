@@ -488,6 +488,27 @@ CREATE TABLE VehiculoComuna
 );
 GO
 
+CREATE TABLE VehiculoFoto
+(
+    ID_foto_vehiculo          INT IDENTITY(1,1) NOT NULL,
+    ID_vehiculo_vehiculo_foto INT NOT NULL,
+    url_foto_vehiculo         VARCHAR(500) NOT NULL,
+    es_principal_foto         BIT NOT NULL DEFAULT 0,
+    activo_foto_vehiculo      BIT NOT NULL DEFAULT 1,
+    fecha_subida_foto         DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+
+    CONSTRAINT PK_vehiculofoto
+        PRIMARY KEY (ID_foto_vehiculo),
+    CONSTRAINT FK_vehiculofoto_vehiculo
+        FOREIGN KEY (ID_vehiculo_vehiculo_foto)
+        REFERENCES Vehiculo(ID_vehiculo)
+);
+GO
+
+CREATE INDEX IX_VehiculoFoto_Vehiculo
+    ON VehiculoFoto(ID_vehiculo_vehiculo_foto);
+GO
+
 CREATE TABLE MovimientoVehiculo
 (
     ID_movimiento_vehiculo INT IDENTITY(1,1) NOT NULL,
@@ -877,7 +898,14 @@ SELECT
     s.ID_sede_proveedor,
     s.nombre_sede_proveedor,
     c.nombre_comuna,
-    r.nombre_region
+    r.nombre_region,
+    (
+        SELECT TOP 1 f.url_foto_vehiculo
+        FROM VehiculoFoto f
+        WHERE f.ID_vehiculo_vehiculo_foto = v.ID_vehiculo
+          AND f.es_principal_foto = 1
+          AND f.activo_foto_vehiculo = 1
+    ) AS url_foto_principal
 FROM Vehiculo v
 INNER JOIN Proveedor p
     ON p.ID_proveedor = v.ID_proveedor_vehiculo

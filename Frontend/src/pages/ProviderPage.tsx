@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 
 import { PageHeader } from '../components/PageHeader';
 import { SectionHeading } from '../components/SectionHeading';
-import { apiRequest } from '../services/api';
+import { apiRequest, apiUpload } from '../services/api';
 import { FleetVehiclePanel } from './FleetVehiclePanel';
 
 interface Provider {
@@ -35,6 +35,7 @@ interface ProviderVehicle {
   nombre_modelo: string;
   precio_diario_base_vehiculo: number;
   nombre_estado_publicacion_vehiculo: string;
+  url_foto_principal?: string | null;
 }
 
 interface ProviderConfig {
@@ -102,6 +103,8 @@ export function ProviderPage() {
     kilometraje: '0',
     precioDiario: '',
   });
+  const [vehiclePhotos, setVehiclePhotos] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
 
   useEffect(() => {
     fetchProviders()
@@ -131,6 +134,51 @@ export function ProviderPage() {
       })
       .catch((requestError: Error) => setError(requestError.message));
   }, [selectedProvider]);
+
+  useEffect(() => {
+    return () => {
+      photoPreviews.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [photoPreviews]);
+
+  const MAX_PHOTO_COUNT = 10;
+  const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+  function setPhotoFiles(files: File[]) {
+    setVehiclePhotos(files);
+    setPhotoPreviews((current) => {
+      current.forEach((url) => URL.revokeObjectURL(url));
+      return files.map((file) => URL.createObjectURL(file));
+    });
+  }
+
+  function handlePhotoFiles(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = Array.from(event.target.files ?? []);
+    const next = [...vehiclePhotos];
+
+    for (const file of selected) {
+      if (file.type !== 'image/png') {
+        setError('Solo se permiten imagenes PNG.');
+        continue;
+      }
+      if (file.size > MAX_PHOTO_BYTES) {
+        setError('Cada foto debe pesar maximo 5 MB.');
+        continue;
+      }
+      if (next.length >= MAX_PHOTO_COUNT) {
+        setError(`Maximo ${MAX_PHOTO_COUNT} fotos por vehiculo.`);
+        break;
+      }
+      next.push(file);
+    }
+
+    setPhotoFiles(next);
+    event.target.value = '';
+  }
+
+  function removePhoto(index: number) {
+    setPhotoFiles(vehiclePhotos.filter((_, photoIndex) => photoIndex !== index));
+  }
 
   function updateField(field: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -199,7 +247,7 @@ export function ProviderPage() {
     setError('');
 
     try {
-      await apiRequest(`/proveedores/${selectedProvider}/vehiculos`, {
+      const vehicleResult = await apiRequest<{ ID_vehiculo: number }>(`/proveedores/${selectedProvider}/vehiculos`, {
         method: 'POST',
         body: JSON.stringify({
           idSedeActual: Number(vehicleForm.idSedeActual),
@@ -214,7 +262,16 @@ export function ProviderPage() {
           precioDiario: Number(vehicleForm.precioDiario),
         }),
       });
+
       setVehicleMessage('Vehículo registrado correctamente. Quedará pendiente de publicación.');
+
+      if (vehiclePhotos.length > 0) {
+        const formData = new FormData();
+        vehiclePhotos.forEach((file) => formData.append('fotos', file));
+        await apiUpload(`/proveedores/${selectedProvider}/vehiculos/${vehicleResult.ID_vehiculo}/fotos`, formData);
+        setVehicleMessage(`Vehículo registrado con ${vehiclePhotos.length} foto(s).`);
+      }
+
       setVehicles(await apiRequest<ProviderVehicle[]>(`/proveedores/${selectedProvider}/vehiculos`));
       setVehicleForm((current) => ({
         ...current,
@@ -224,6 +281,7 @@ export function ProviderPage() {
         kilometraje: '0',
         precioDiario: '',
       }));
+      setPhotoFiles([]);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible registrar el vehículo.');
     } finally {
@@ -429,6 +487,20 @@ export function ProviderPage() {
               <label>Año<input type="number" value={vehicleForm.anio} onChange={(event) => updateVehicleField('anio', event.target.value)} min="1950" max="2100" required /></label>
               <label>Kilometraje<input type="number" value={vehicleForm.kilometraje} onChange={(event) => updateVehicleField('kilometraje', event.target.value)} min="0" required /></label>
               <label>Precio diario<input type="number" value={vehicleForm.precioDiario} onChange={(event) => updateVehicleField('precioDiario', event.target.value)} min="1" required /></label>
+              <label className="photo-field">
+                Fotos del vehículo <small>(PNG, máx. 5 MB, hasta 10)</small>
+                <input type="file" accept="image/png" multiple onChange={handlePhotoFiles} />
+              </label>
+              {photoPreviews.length > 0 && (
+                <div className="photo-preview-grid" role="group" aria-label="Fotos por subir">
+                  {photoPreviews.map((url, index) => (
+                    <div className="photo-preview-item" key={url}>
+                      <img src={url} alt={`Foto ${index + 1}`} />
+                      <button type="button" className="photo-remove" onClick={() => removePhoto(index)} aria-label={`Quitar foto ${index + 1}`}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {vehicleMessage && <p className="success-message" role="status">{vehicleMessage}</p>}
               <button className="button button-primary button-full" disabled={vehicleSubmitting}>{vehicleSubmitting ? 'Registrando...' : 'Registrar vehículo'}</button>
             </form>

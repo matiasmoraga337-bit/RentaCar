@@ -64,10 +64,12 @@ function clearSession() {
 }
 
 async function rawFetch(path: string, options: RequestInit): Promise<Response> {
+  const isMultipart = options.body instanceof FormData;
+
   return fetch(buildUrl(path), {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isMultipart ? {} : { 'Content-Type': 'application/json' }),
       ...authHeaders(),
       ...options.headers,
     },
@@ -98,6 +100,15 @@ export async function apiRequest<T>(
   }
 
   return data;
+}
+
+export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
+  return apiRequest<T>(path, { method: 'POST', body: formData });
+}
+
+export function assetUrl(path: string): string {
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_URL.replace(/\/api\/?$/, '')}${path}`;
 }
 
 export { API_URL };
