@@ -1,32 +1,34 @@
-# React + TypeScript + Vite
+# RentaCar - Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Aplicacion React + TypeScript + Vite del marketplace multi-proveedor de
+arriendo de vehiculos.
 
-Currently, two official plugins are available:
+## Requisitos
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Node.js 22 o superior.
+- Backend RentaCar levantado en `http://localhost:3000` (ver README raiz).
 
-## React Compiler
+## Desarrollo
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Frontend disponible en `http://localhost:5173`. La direccion de la API se
+configura con `CORS_ORIGIN` y `FRONTEND_URL` en el `.env` de la raiz del
+proyecto.
+
+## Build y lint
+
+```bash
+npm run lint
+npm run build
+```
+
+## Estructura
+
+- `src/services/api.ts`: cliente de la API (base URL y autenticacion).
+- `src/context/`: contexto de sesion (`AuthContext`).
+- `src/pages/`: paginas de la aplicacion (catalogo, reservas, pagos, arriendos, admin, proveedor).
+- `src/components/`: componentes de UI reutilizables.

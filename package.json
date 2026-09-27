@@ -8,7 +8,10 @@
     "dev:backend": "npm --prefix Backend run dev",
     "build:frontend": "npm --prefix Frontend run build",
     "build:backend": "npm --prefix Backend run build",
-    "test:e2e:local": "npm --prefix Backend run test:e2e:local"
+    "db:setup": "npm --prefix Backend run db:setup",
+    "db:seed": "npm --prefix Backend run seed:demo",
+    "test:e2e:local": "npm --prefix Backend run test:e2e:local",
+    "test:qa:local": "npm --prefix Backend run test:qa:local"
   },
   "engines": {
     "node": ">=22 <25",

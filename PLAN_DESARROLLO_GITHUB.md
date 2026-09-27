@@ -32,32 +32,32 @@ No se utilizará ORM. Las consultas se realizarán mediante SQL nativo y procedi
 
 ## 4. Estructura del repositorio
 
+Estructura real de la entrega (los nombres planeados `frontend/`, `backend/`
+y `database/` no se usan en el repositorio final):
+
 ```text
 rentacar/
-├── frontend/
+├── Frontend/
 │   ├── src/
 │   ├── package.json
 │   └── package-lock.json
-├── backend/
+├── Backend/
+│   ├── scripts/          (setup de BD, seed y suites de prueba)
 │   ├── src/
 │   ├── package.json
 │   └── package-lock.json
-├── database/
-│   ├── RentaCarDB.sql
-│   ├── 01_schema.sql
-│   ├── 02_data.sql
-│   ├── 03_views.sql
-│   ├── 04_triggers.sql
-│   └── 05_procedures.sql
+├── migrations/           (migraciones SQL incrementales)
+├── RentaCarDB.sql        (esquema completo desde cero)
 ├── docs/
-│   ├── modelo-relacional.pdf
-│   ├── requerimientos.md
-│   └── presentacion.pdf
+│   ├── API.md
+│   └── MODELO_RELACIONAL.md
 ├── docker-compose.yml
 ├── README.md
 ├── .env.example
 └── .gitignore
 ```
+
+El estado de cada fase (completada o pendiente) se registra en `PLANNING.md`.
 
 ## 5. Ramas de GitHub
 

@@ -171,6 +171,43 @@ async function seedUsers(pool, catalog, existing) {
   let nuevo = 0;
   const usuarios = [];
 
+  if (!existing.emails.has(adminEmail)) {
+    const adminHash = bcrypt.hashSync(adminPassword, 10);
+    let baseRut = 29333331;
+    let rut;
+    do {
+      baseRut += 1;
+      rut = `${baseRut}-0`;
+    } while (existing.ruts.has(rut));
+    existing.ruts.add(rut);
+
+    const persona = await run(pool, `
+      INSERT INTO Persona(rut_persona, nombres_persona, apellido_paterno_persona, apellido_materno_persona, telefono_persona)
+      OUTPUT INSERTED.ID_persona
+      VALUES (@rut, N'Administrador', N'RentaCar', N'Plataforma', '9 9999 9999');
+    `, [['rut', sql.VarChar(12), rut]]);
+
+    const user = await run(pool, `
+      INSERT INTO Usuario(ID_persona_usuario, email_usuario, password_hash_usuario, activo_usuario, email_confirmado_usuario)
+      OUTPUT INSERTED.ID_usuario
+      VALUES (@personaId, @email, @hash, 1, 1);
+    `, [
+      ['personaId', sql.Int, persona.recordset[0].ID_persona],
+      ['email', sql.VarChar(150), adminEmail],
+      ['hash', sql.VarChar(255), adminHash],
+    ]);
+
+    const rolRow = await run(pool, "SELECT ID_rol FROM Rol WHERE nombre_rol = 'ADMIN';");
+    await run(pool, `
+      INSERT INTO UsuarioRol(ID_usuario_usuario_rol, ID_rol_usuario_rol)
+      VALUES (@usuarioId, @rolId);
+    `, [
+      ['usuarioId', sql.Int, user.recordset[0].ID_usuario],
+      ['rolId', sql.Int, rolRow.recordset[0].ID_rol],
+    ]);
+    nuevo += 1;
+  }
+
   const build = async (rut, nombres, apellidoPaterno, apellidoMaterno, telefono, email, rol, esCliente) => {
     if (existing.emails.has(email)) {
       const row = await run(pool,
@@ -785,7 +822,7 @@ async function main() {
 
   const usuarios = await seedUsers(pool, catalog, { ruts: existingRuts, emails: existingEmails });
   counts.usuariosNuevos = usuarios.nuevos;
-  console.log(`Usuarios demo: ${usuarios.usuarios.length} en total, +${usuarios.nuevos} creados (8 clientes + 4 proveedores).`);
+  console.log(`Usuarios demo: ${usuarios.usuarios.length} en total, +${usuarios.nuevos} creados (8 clientes + 4 proveedores + 1 admin).`);
 
   const proveedores = await seedProviders(pool, usuarios);
   counts.proveedoresNuevos = proveedores.filter((p) => p.nuevo).length;
