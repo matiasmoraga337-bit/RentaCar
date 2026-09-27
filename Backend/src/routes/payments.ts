@@ -253,8 +253,11 @@ router.post('/reservas/:id/pagos', authenticateToken, async (request, response, 
     referencia?: string;
   };
 
-  if (!Number.isInteger(reservationId) || reservationId <= 0 || !body.idMetodoPago || !body.montoPago || body.aprobado === undefined) {
-    response.status(400).json({ message: 'Datos de pago incompletos.' });
+  if (!Number.isInteger(reservationId) || reservationId <= 0
+    || typeof body.idMetodoPago !== 'number' || !Number.isInteger(body.idMetodoPago) || body.idMetodoPago <= 0
+    || typeof body.montoPago !== 'number' || !Number.isFinite(body.montoPago) || body.montoPago <= 0
+    || typeof body.aprobado !== 'boolean') {
+    response.status(400).json({ message: 'Datos de pago incompletos o invalidos.' });
     return;
   }
 
