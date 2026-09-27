@@ -1,7 +1,7 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 
 import { getDatabasePool, sql } from '../database/sql.js';
-import { authenticateToken, requireRoles } from '../middlewares/auth.js';
+import { authenticateToken, requireFreshRoles } from '../middlewares/auth.js';
 import { assertProviderAccess } from '../middlewares/provider-access.js';
 import { parseId } from '../utils/id.js';
 import {
@@ -22,6 +22,44 @@ interface ProviderBody {
   rutProveedor?: string;
   telefono?: string;
   email?: string;
+}
+
+async function isProviderAdmin(
+  pool: sql.ConnectionPool,
+  providerId: number,
+  userId: number,
+): Promise<boolean> {
+  const result = await pool
+    .request()
+    .input('providerId', sql.Int, providerId)
+    .input('userId', sql.Int, userId)
+    .query(`
+      SELECT 1
+      FROM ProveedorUsuario
+      WHERE ID_proveedor_proveedor_usuario = @providerId
+        AND ID_usuario_proveedor_usuario = @userId
+        AND es_administrador_proveedor_usuario = 1;
+    `);
+
+  return result.recordset.length > 0;
+}
+
+async function assertProviderAdmin(
+  request: Request,
+  response: Response,
+  pool: sql.ConnectionPool,
+  providerId: number,
+): Promise<boolean> {
+  if (request.user!.roles.includes('ADMIN')) return true;
+
+  const allowed = await isProviderAdmin(pool, providerId, request.user!.id);
+
+  if (!allowed) {
+    response.status(403).json({ message: 'Debes ser administrador del proveedor.' });
+    return false;
+  }
+
+  return true;
 }
 
 router.post('/', authenticateToken, async (request, response, next) => {
@@ -159,6 +197,381 @@ router.get('/me', authenticateToken, async (request, response, next) => {
       `);
 
     response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/:id/perfil', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const body = request.body as {
+    nombreComercial?: string;
+    razonSocial?: string | null;
+    rutProveedor?: string | null;
+    telefono?: string | null;
+    email?: string | null;
+  };
+
+  if (!providerId) {
+    response.status(400).json({ message: 'Proveedor invalido.' });
+    return;
+  }
+
+  const nombreComercial = body.nombreComercial?.trim();
+  const razonSocial = body.razonSocial?.trim() ?? null;
+  const rutProveedor = body.rutProveedor?.trim() ?? null;
+  const telefono = body.telefono?.trim() ?? null;
+  const email = body.email?.trim().toLowerCase() ?? null;
+
+  if (!nombreComercial || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+    response.status(400).json({ message: 'Datos de proveedor invalidos.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('nombreComercial', sql.NVarChar(150), nombreComercial)
+      .input('razonSocial', sql.NVarChar(150), razonSocial)
+      .input('rutProveedor', sql.VarChar(12), rutProveedor)
+      .input('telefono', sql.VarChar(20), telefono)
+      .input('email', sql.VarChar(150), email)
+      .query(`
+        UPDATE Proveedor
+        SET nombre_comercial_proveedor = @nombreComercial,
+            razon_social_proveedor = COALESCE(@razonSocial, razon_social_proveedor),
+            rut_proveedor = COALESCE(@rutProveedor, rut_proveedor),
+            telefono_proveedor = COALESCE(@telefono, telefono_proveedor),
+            email_proveedor = COALESCE(@email, email_proveedor)
+        WHERE ID_proveedor = @providerId;
+
+        SELECT @@ROWCOUNT AS affected;
+      `);
+
+    if (result.recordset[0].affected === 0) {
+      response.status(404).json({ message: 'Proveedor no encontrado.' });
+      return;
+    }
+
+    response.json({ message: 'Perfil del proveedor actualizado.' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/:id/usuarios', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+
+  if (!providerId) {
+    response.status(400).json({ message: 'Proveedor invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .query(`
+        SELECT
+          u.ID_usuario,
+          u.email_usuario,
+          u.activo_usuario,
+          CONCAT(p.nombres_persona, ' ', p.apellido_paterno_persona) AS nombre,
+          pu.es_administrador_proveedor_usuario AS es_administrador,
+          pu.fecha_vinculacion_proveedor_usuario AS fecha_vinculacion
+        FROM ProveedorUsuario pu
+        INNER JOIN Usuario u ON u.ID_usuario = pu.ID_usuario_proveedor_usuario
+        INNER JOIN Persona p ON p.ID_persona = u.ID_persona_usuario
+        WHERE pu.ID_proveedor_proveedor_usuario = @providerId
+        ORDER BY pu.es_administrador_proveedor_usuario DESC, u.ID_usuario ASC;
+      `);
+
+    response.json(result.recordset);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:id/usuarios', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const email = typeof request.body?.email === 'string'
+    ? request.body.email.trim().toLowerCase()
+    : '';
+
+  if (!providerId || !email) {
+    response.status(400).json({ message: 'Proveedor y correo son obligatorios.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    if (!(await assertProviderAdmin(request, response, pool, providerId))) {
+      return;
+    }
+
+    const userResult = await pool
+      .request()
+      .input('email', sql.VarChar(150), email)
+      .query(`
+        SELECT ID_usuario
+        FROM Usuario
+        WHERE email_usuario = @email;
+      `);
+    const targetUser = userResult.recordset[0];
+
+    if (!targetUser) {
+      response.status(404).json({ message: 'No se encontro un usuario con ese correo.' });
+      return;
+    }
+
+    const targetId = targetUser.ID_usuario as number;
+
+    const existing = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('userId', sql.Int, targetId)
+      .query(`
+        SELECT 1
+        FROM ProveedorUsuario
+        WHERE ID_proveedor_proveedor_usuario = @providerId
+          AND ID_usuario_proveedor_usuario = @userId;
+      `);
+
+    if (existing.recordset.length > 0) {
+      response.status(409).json({ message: 'El usuario ya pertenece a este proveedor.' });
+      return;
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      await transaction
+        .request()
+        .input('providerId', sql.Int, providerId)
+        .input('userId', sql.Int, targetId)
+        .query(`
+          INSERT INTO ProveedorUsuario
+          (
+            ID_proveedor_proveedor_usuario,
+            ID_usuario_proveedor_usuario
+          )
+          VALUES (@providerId, @userId);
+
+          IF NOT EXISTS (
+            SELECT 1
+            FROM UsuarioRol ur
+            INNER JOIN Rol r ON r.ID_rol = ur.ID_rol_usuario_rol
+            WHERE ur.ID_usuario_usuario_rol = @userId
+              AND r.nombre_rol = 'PROVEEDOR'
+          )
+          BEGIN
+            INSERT INTO UsuarioRol (
+              ID_usuario_usuario_rol,
+              ID_rol_usuario_rol
+            )
+            SELECT @userId, ID_rol
+            FROM Rol
+            WHERE nombre_rol = 'PROVEEDOR';
+          END
+        `);
+
+      await transaction.commit();
+      response.status(201).json({ message: 'Usuario asociado al proveedor.' });
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/:id/usuarios/:userId', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const userId = parseId(request.params.userId);
+  const esAdministrador = request.body?.esAdministrador;
+
+  if (!providerId || !userId || typeof esAdministrador !== 'boolean') {
+    response.status(400).json({ message: 'Proveedor, usuario o rol invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    if (!(await assertProviderAdmin(request, response, pool, providerId))) {
+      return;
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      if (!esAdministrador) {
+        const admins = await transaction
+          .request()
+          .input('providerId', sql.Int, providerId)
+          .input('userId', sql.Int, userId)
+          .query(`
+            SELECT
+              COUNT(*) AS total,
+              ISNULL(SUM(CASE WHEN pu.es_administrador_proveedor_usuario = 1 THEN 1 ELSE 0 END), 0) AS admins
+            FROM ProveedorUsuario pu
+            WHERE pu.ID_proveedor_proveedor_usuario = @providerId
+              AND (pu.ID_usuario_proveedor_usuario = @userId OR pu.es_administrador_proveedor_usuario = 1);
+          `);
+        const row = admins.recordset[0];
+        if (row.total === 0) {
+          await transaction.rollback();
+          response.status(404).json({ message: 'El usuario no pertenece a este proveedor.' });
+          return;
+        }
+        if (row.admins === 1) {
+          await transaction.rollback();
+          response.status(400).json({ message: 'El proveedor debe conservar al menos un administrador.' });
+          return;
+        }
+      }
+
+      const result = await transaction
+        .request()
+        .input('providerId', sql.Int, providerId)
+        .input('userId', sql.Int, userId)
+        .input('esAdministrador', sql.Bit, esAdministrador)
+        .query(`
+          UPDATE ProveedorUsuario
+          SET es_administrador_proveedor_usuario = @esAdministrador
+          WHERE ID_proveedor_proveedor_usuario = @providerId
+            AND ID_usuario_proveedor_usuario = @userId;
+
+          SELECT @@ROWCOUNT AS affected;
+        `);
+
+      if (result.recordset[0].affected === 0) {
+        await transaction.rollback();
+        response.status(404).json({ message: 'El usuario no pertenece a este proveedor.' });
+        return;
+      }
+
+      await transaction.commit();
+      response.json({ message: 'Rol de administrador del proveedor actualizado.' });
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      throw error;
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id/usuarios/:userId', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const userId = parseId(request.params.userId);
+
+  if (!providerId || !userId) {
+    response.status(400).json({ message: 'Proveedor o usuario invalido.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    const isAdminCaller = request.user!.roles.includes('ADMIN');
+
+    if (!(await assertProviderAdmin(request, response, pool, providerId))) {
+      return;
+    }
+
+    if (!isAdminCaller && userId === request.user!.id) {
+      response.status(400).json({ message: 'No puedes desvincularte a ti mismo.' });
+      return;
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const target = await transaction
+        .request()
+        .input('providerId', sql.Int, providerId)
+        .input('userId', sql.Int, userId)
+        .query(`
+          SELECT es_administrador_proveedor_usuario
+          FROM ProveedorUsuario
+          WHERE ID_proveedor_proveedor_usuario = @providerId
+            AND ID_usuario_proveedor_usuario = @userId;
+        `);
+
+      if (target.recordset.length === 0) {
+        await transaction.rollback();
+        response.status(404).json({ message: 'El usuario no pertenece a este proveedor.' });
+        return;
+      }
+
+      if (target.recordset[0].es_administrador_proveedor_usuario === true) {
+        const admins = await transaction
+          .request()
+          .input('providerId', sql.Int, providerId)
+          .query(`
+            SELECT COUNT(*) AS total
+            FROM ProveedorUsuario
+            WHERE ID_proveedor_proveedor_usuario = @providerId
+              AND es_administrador_proveedor_usuario = 1;
+          `);
+        if (admins.recordset[0].total === 1) {
+          await transaction.rollback();
+          response.status(400).json({ message: 'El proveedor debe conservar al menos un administrador.' });
+          return;
+        }
+      }
+
+      await transaction
+        .request()
+        .input('providerId', sql.Int, providerId)
+        .input('userId', sql.Int, userId)
+        .query(`
+          DELETE FROM ProveedorUsuario
+          WHERE ID_proveedor_proveedor_usuario = @providerId
+            AND ID_usuario_proveedor_usuario = @userId;
+        `);
+
+      const remaining = await transaction
+        .request()
+        .input('userId', sql.Int, userId)
+        .query(`
+          SELECT COUNT(*) AS total
+          FROM ProveedorUsuario
+          WHERE ID_usuario_proveedor_usuario = @userId;
+        `);
+
+      if (remaining.recordset[0].total === 0) {
+        await transaction
+          .request()
+          .input('userId', sql.Int, userId)
+          .query(`
+            DELETE FROM UsuarioRol
+            WHERE ID_usuario_usuario_rol = @userId
+              AND ID_rol_usuario_rol =
+                (SELECT ID_rol FROM Rol WHERE nombre_rol = 'PROVEEDOR');
+          `);
+      }
+
+      await transaction.commit();
+      response.json({ message: 'Usuario desvinculado del proveedor.' });
+    } catch (error) {
+      await transaction.rollback().catch(() => undefined);
+      throw error;
+    }
   } catch (error) {
     next(error);
   }
@@ -430,6 +843,77 @@ router.post('/:id/vehiculos', authenticateToken, async (request, response, next)
       await transaction.rollback().catch(() => undefined);
       throw error;
     }
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/:id/vehiculos/:vehicleId', authenticateToken, async (request, response, next) => {
+  const providerId = parseId(request.params.id);
+  const vehicleId = parseId(request.params.vehicleId);
+  const body = request.body as {
+    idModelo?: number;
+    idTipoVehiculo?: number;
+    idTipoCombustible?: number;
+    idTipoTransmision?: number;
+    anio?: number;
+    kilometraje?: number;
+    precioDiario?: number;
+  };
+
+  const hasAnyField = body && Object.keys(body).length > 0;
+  if (!providerId || !vehicleId || !hasAnyField) {
+    response.status(400).json({ message: 'Proveedor, vehiculo o datos invalidos.' });
+    return;
+  }
+
+  try {
+    const pool = await getDatabasePool();
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('providerId', sql.Int, providerId)
+      .input('vehicleId', sql.Int, vehicleId)
+      .input('modelId', sql.Int, body.idModelo ?? null)
+      .input('typeId', sql.Int, body.idTipoVehiculo ?? null)
+      .input('fuelId', sql.Int, body.idTipoCombustible ?? null)
+      .input('transmissionId', sql.Int, body.idTipoTransmision ?? null)
+      .input('year', sql.SmallInt, body.anio ?? null)
+      .input('mileage', sql.Int, body.kilometraje ?? null)
+      .input('dailyPrice', sql.Decimal(12, 2), body.precioDiario ?? null)
+      .query(`
+        UPDATE v
+        SET ID_modelo_vehiculo = COALESCE(@modelId, v.ID_modelo_vehiculo),
+            ID_tipo_vehiculo_vehiculo = COALESCE(@typeId, v.ID_tipo_vehiculo_vehiculo),
+            ID_tipo_combustible_vehiculo = COALESCE(@fuelId, v.ID_tipo_combustible_vehiculo),
+            ID_tipo_transmision_vehiculo = COALESCE(@transmissionId, v.ID_tipo_transmision_vehiculo),
+            anio_vehiculo = COALESCE(@year, v.anio_vehiculo),
+            kilometraje_vehiculo = COALESCE(@mileage, v.kilometraje_vehiculo),
+            precio_diario_base_vehiculo = COALESCE(@dailyPrice, v.precio_diario_base_vehiculo),
+            ID_estado_publicacion_vehiculo_vehiculo =
+              CASE
+                WHEN v.ID_estado_publicacion_vehiculo_vehiculo =
+                  (SELECT ID_estado_publicacion_vehiculo FROM EstadoPublicacionVehiculo WHERE nombre_estado_publicacion_vehiculo = 'PUBLICADO')
+                THEN
+                  (SELECT ID_estado_publicacion_vehiculo FROM EstadoPublicacionVehiculo WHERE nombre_estado_publicacion_vehiculo = 'PENDIENTE')
+                ELSE v.ID_estado_publicacion_vehiculo_vehiculo
+              END
+        FROM Vehiculo v
+        WHERE v.ID_vehiculo = @vehicleId
+          AND v.ID_proveedor_vehiculo = @providerId;
+
+        SELECT @@ROWCOUNT AS affected;
+      `);
+
+    if (result.recordset[0].affected === 0) {
+      response.status(404).json({ message: 'Vehiculo no encontrado para este proveedor.' });
+      return;
+    }
+
+    response.json({ message: 'Vehiculo actualizado.' });
   } catch (error) {
     next(error);
   }
@@ -741,7 +1225,7 @@ router.delete('/:id/vehiculos/:vehicleId/fotos/:photoId', authenticateToken, asy
   }
 });
 
-router.patch('/:id/estado', authenticateToken, requireRoles('ADMIN'), async (request, response, next) => {
+router.patch('/:id/estado', authenticateToken, requireFreshRoles('ADMIN'), async (request, response, next) => {
   const providerId = parseId(request.params.id);
   const state = typeof request.body?.estado === 'string'
     ? request.body.estado.toUpperCase()
