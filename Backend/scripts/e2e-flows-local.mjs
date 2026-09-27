@@ -155,4 +155,9 @@ assert.ok(asuntos.includes(`Reserva #${reservaAprobada.ID_reserva} cancelada`), 
 assert.ok(asuntos.includes('Pago aprobado'), 'Falta el correo de pago aprobado.');
 assert.ok(asuntos.includes('Pago rechazado'), 'Falta el correo de pago rechazado.');
 
+await expectOk(`${api}/reservas/${reservaRechazada.ID_reserva}/cancelar`, {
+  method: 'PATCH',
+  headers: clientHeaders,
+});
+
 console.log('E2E de flujos (pago, reembolso, cancelacion y admin): OK');
