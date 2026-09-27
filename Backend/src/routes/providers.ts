@@ -2,6 +2,8 @@ import { Router } from 'express';
 
 import { getDatabasePool, sql } from '../database/sql.js';
 import { authenticateToken, requireRoles } from '../middlewares/auth.js';
+import { assertProviderAccess } from '../middlewares/provider-access.js';
+import { parseId } from '../utils/id.js';
 
 const router = Router();
 
@@ -13,34 +15,6 @@ interface ProviderBody {
   rutProveedor?: string;
   telefono?: string;
   email?: string;
-}
-
-function parseId(value: string | string[] | undefined): number | null {
-  if (Array.isArray(value)) return null;
-  const id = Number(value);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
-
-async function hasProviderAccess(
-  pool: sql.ConnectionPool,
-  providerId: number,
-  userId: number,
-  isAdmin: boolean,
-) {
-  if (isAdmin) return true;
-
-  const result = await pool
-    .request()
-    .input('providerId', sql.Int, providerId)
-    .input('userId', sql.Int, userId)
-    .query(`
-      SELECT 1
-      FROM ProveedorUsuario
-      WHERE ID_proveedor_proveedor_usuario = @providerId
-        AND ID_usuario_proveedor_usuario = @userId;
-    `);
-
-  return result.recordset.length > 0;
 }
 
 router.post('/', authenticateToken, async (request, response, next) => {
@@ -183,10 +157,7 @@ router.post('/:id/sedes', authenticateToken, async (request, response, next) => 
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -228,10 +199,7 @@ router.get('/:id/sedes', authenticateToken, async (request, response, next) => {
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -269,10 +237,7 @@ router.get('/:id/vehiculos', authenticateToken, async (request, response, next) 
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -343,10 +308,7 @@ router.post('/:id/vehiculos', authenticateToken, async (request, response, next)
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -492,10 +454,7 @@ router.get('/:id/vehiculos/:vehicleId/sedes', authenticateToken, async (request,
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -543,10 +502,7 @@ router.post('/:id/vehiculos/:vehicleId/sedes', authenticateToken, async (request
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -628,10 +584,7 @@ router.delete('/:id/vehiculos/:vehicleId/sedes/:sedeId', authenticateToken, asyn
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -684,10 +637,7 @@ router.get('/:id/vehiculos/:vehicleId/movimientos', authenticateToken, async (re
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -732,10 +682,7 @@ router.post('/:id/vehiculos/:vehicleId/movimiento', authenticateToken, async (re
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -862,10 +809,7 @@ router.get('/:id/configuracion', authenticateToken, async (request, response, ne
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -902,9 +846,7 @@ router.get('/:id/reporte', authenticateToken, async (request, response, next) =>
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes consultar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 
@@ -958,10 +900,7 @@ router.patch('/:id/configuracion', authenticateToken, async (request, response, 
 
   try {
     const pool = await getDatabasePool();
-    const isAdmin = request.user!.roles.includes('ADMIN');
-
-    if (!(await hasProviderAccess(pool, providerId, request.user!.id, isAdmin))) {
-      response.status(403).json({ message: 'No puedes modificar este proveedor.' });
+    if (!(await assertProviderAccess(request, response, pool, providerId))) {
       return;
     }
 

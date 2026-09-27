@@ -3,16 +3,11 @@ import { Router } from 'express';
 import { getDatabasePool, sql } from '../database/sql.js';
 import { authenticateToken, requireRoles } from '../middlewares/auth.js';
 import { sendProviderStatusEmail } from '../services/mail.js';
+import { parseId } from '../utils/id.js';
 
 const router = Router();
 
 router.use(authenticateToken, requireRoles('ADMIN'));
-
-function parseId(value: string | string[] | undefined): number | null {
-  if (Array.isArray(value)) return null;
-  const id = Number(value);
-  return Number.isInteger(id) && id > 0 ? id : null;
-}
 
 router.get('/resumen', async (_request, response, next) => {
   try {
@@ -310,7 +305,17 @@ router.patch('/usuarios/:id/estado', async (request, response, next) => {
     const result = await pool.request()
       .input('userId', sql.Int, userId)
       .input('active', sql.Bit, active)
-      .query(`UPDATE Usuario SET activo_usuario = @active WHERE ID_usuario = @userId; SELECT @@ROWCOUNT AS affected;`);
+      .query(`
+        UPDATE Usuario SET activo_usuario = @active WHERE ID_usuario = @userId;
+        SELECT @@ROWCOUNT AS affected;
+        IF @active = 0
+        BEGIN
+          UPDATE Sesion
+          SET fecha_revocacion_sesion = SYSDATETIME()
+          WHERE ID_usuario_sesion = @userId
+            AND fecha_revocacion_sesion IS NULL;
+        END
+      `);
     if (result.recordset[0].affected !== 1) {
       response.status(404).json({ message: 'Usuario no encontrado.' });
       return;
