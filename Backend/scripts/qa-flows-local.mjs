@@ -57,6 +57,18 @@ async function mailpitItem(destination) {
   return expectOk(`${mailpit}/api/v1/message/${message.ID}`);
 }
 
+async function waitForMail(destination, subjectPart, retries = 8) {
+  for (let attempt = 0; attempt < retries; attempt += 1) {
+    const list = await expectOk(`${mailpit}/api/v1/messages`);
+    const message = list.messages.find((candidate) =>
+      candidate.To.some((to) => to.Address === destination)
+      && (candidate.Subject ?? '').includes(subjectPart));
+    if (message) return expectOk(`${mailpit}/api/v1/message/${message.ID}`);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`No se encontró el correo "${subjectPart}" para ${destination}.`);
+}
+
 console.log('QA bloque 1: login de roles demo');
 const providerSession = await login(providerEmail, providerPassword);
 const clientSession = await login(clientEmail, clientPassword);
@@ -221,7 +233,9 @@ assert.equal(rental.nombre_estado_reserva, 'COMPLETADA');
 reservaDetalle = await expectOk(`${api}/reservas/mis-reservas`, { headers: clientHeaders }).then(
   (items) => items.find((item) => item.ID_reserva === reserva.ID_reserva));
 assert.equal(reservaDetalle.nombre_estado_reserva, 'COMPLETADA');
-console.log('  Arriendo COMPLETADO, vehiculo liberado y reserva COMPLETADA.');
+const devolucionMail = await waitForMail(clientEmail, 'Devolucion confirmada');
+assert.match(devolucionMail.Text ?? '', new RegExp(plate));
+console.log('  Arriendo COMPLETADO, vehiculo liberado, reserva COMPLETADA y correo de devolución enviado.');
 
 console.log('QA bloque 7: resena y regla de duplicado');
 const resenaNueva = await expectOk(`${api}/arriendos/${arriendoId}/resenas`, {
@@ -331,5 +345,38 @@ await expectStatus(`${api}/arriendos`, {
   }),
 }, 403);
 console.log('  Centinelas 401/403 correctos.');
+
+console.log('QA bloque 11: proveedores empresa y persona via API');
+const provEmpresa = await expectOk(`${api}/proveedores`, {
+  method: 'POST',
+  headers: clientHeaders,
+  body: JSON.stringify({
+    tipo: 'EMPRESA',
+    nombreComercial: `QA Empresa ${stamp}`,
+    razonSocial: 'QA Empresa SpA',
+    rutProveedor: `77${String(stamp).slice(-8)}-K`,
+    telefono: '+56 9 1111 0001',
+    email: `empresa-${stamp}@rentacar.local`,
+  }),
+});
+assert.ok(provEmpresa.providerId > 0, 'No se retorno el ID del proveedor EMPRESA.');
+const provPersona = await expectOk(`${api}/proveedores`, {
+  method: 'POST',
+  headers: qaHeaders,
+  body: JSON.stringify({
+    tipo: 'PERSONA',
+    nombreComercial: `QA Persona ${stamp}`,
+    telefono: '+56 9 1111 0002',
+    email: `persona-${stamp}@rentacar.local`,
+  }),
+});
+assert.ok(provPersona.providerId > 0, 'No se retorno el ID del proveedor PERSONA.');
+const inconsistente = await request(`${api}/proveedores`, {
+  method: 'POST',
+  headers: clientHeaders,
+  body: JSON.stringify({ tipo: 'EMPRESA', nombreComercial: 'QA Invalida' }),
+});
+assert.equal(inconsistente.status, 400, `Empresa sin razon social ni RUT deberia dar 400: ${JSON.stringify(inconsistente.data)}`);
+console.log('  EMPRESA y PERSONA creados; empresa incompleta rechazada con 400.');
 
 console.log('\nQA integral de flujos: OK');

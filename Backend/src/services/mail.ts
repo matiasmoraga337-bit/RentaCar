@@ -151,6 +151,38 @@ export async function sendNewReservationProviderEmail(
   });
 }
 
+export async function sendDevolutionCompletedEmail(
+  email: string,
+  name: string,
+  arriendoId: number,
+  vehicle: string,
+  sede: string,
+  kilometrajeFinal: number,
+  combustibleFinal: number,
+  fecha: string,
+) {
+  const fechaTexto = fecha ? new Date(fecha).toLocaleString('es-CL') : '';
+  await transporter.sendMail({
+    from: env.smtp.from,
+    to: email,
+    subject: `Devolucion confirmada del arriendo #${arriendoId} - RentaCar`,
+    text: `Hola ${name}, tu arriendo #${arriendoId} del vehiculo ${vehicle} fue devuelto${fechaTexto ? ` el ${fechaTexto}` : ''}. Kilometraje final ${kilometrajeFinal} km, combustible final ${combustibleFinal}%.`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#173b43">
+        <h1>Devolucion confirmada</h1>
+        <p>Hola ${escapeHtml(name)}, te confirmamos la devolucion del arriendo <strong>#${arriendoId}</strong>.</p>
+        <ul>
+          <li>Vehiculo: <strong>${escapeHtml(vehicle)}</strong></li>
+          <li>Sede de devolucion: <strong>${escapeHtml(sede)}</strong></li>
+          <li>Kilometraje final: <strong>${kilometrajeFinal} km</strong></li>
+          <li>Combustible final: <strong>${combustibleFinal}%</strong></li>
+        </ul>
+        <p>Gracias por arrendar con RentaCar.</p>
+      </div>
+    `,
+  });
+}
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (character) => ({
     '&': '&amp;',
