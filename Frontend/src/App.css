@@ -2052,10 +2052,13 @@ h1 {
 
   .site-header {
     padding: 18px 0;
+    flex-wrap: wrap;
+    row-gap: var(--space-3);
   }
 
   .main-nav {
-    gap: 13px;
+    gap: 8px 13px;
+    flex-wrap: wrap;
   }
 
   .main-nav > a:first-child {
@@ -2099,7 +2102,8 @@ h1 {
 
   .feature-grid,
   .profile-grid,
-  .form-grid {
+  .form-grid,
+  .profile-edit-form {
     grid-template-columns: 1fr;
   }
 
@@ -2218,5 +2222,68 @@ h1 {
 
   .route-steps {
     flex-direction: column;
+  }
+}
+
+/* Móviles pequeños */
+@media (max-width: 480px) {
+  .site-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .main-nav {
+    font-size: var(--fs-xs);
+    justify-content: flex-start;
+  }
+
+  .hero-copy h1 {
+    font-size: clamp(2.4rem, 11vw, 3.05rem);
+  }
+
+  .auth-card {
+    padding: 26px 18px;
+  }
+
+  .vehicle-content {
+    padding: var(--space-4);
+  }
+
+  .vehicle-footer {
+    flex-wrap: wrap;
+  }
+
+  .detail-content {
+    padding: 20px 10px;
+  }
+
+  .reservation-header {
+    flex-direction: column;
+  }
+
+  .reservation-actions,
+  .review-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .fleet-item-actions {
+    align-items: stretch;
+  }
+
+  .admin-actions .button,
+  .reservation-actions .button,
+  .review-actions .button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
   }
 }
