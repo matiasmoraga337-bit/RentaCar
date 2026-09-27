@@ -164,11 +164,16 @@ Tareas:
 - [x] Crear sedes.
 - [x] Registrar vehículos.
 - [x] Configurar sedes habilitadas.
-- [ ] Configurar comunas de operación.
+- [x] Configurar comunas de operación.
 - [x] Publicar vehículos.
 - [x] Registrar movimientos.
 
 Resultado esperado: un proveedor aprobado puede publicar vehículos.
+
+> Nota: "Configurar comunas de operación" se resuelve por la disposición por
+> sede y comuna (`VehiculoSede`) más la configuración de entrega/retiro a
+> domicilio con radio máximo por proveedor; no existe una entidad separada de
+> "comunas de operación" en el modelo relacional.
 
 ### Fase 7: Búsqueda
 
@@ -236,7 +241,7 @@ Tareas:
 - [x] Configurar SMTP.
 - [x] Enviar confirmación de reserva.
 - [x] Enviar confirmación de pago.
-- [ ] Enviar notificación de devolución.
+- [x] Enviar notificación de devolución.
 
 Resultado esperado: el cliente puede calificar un arriendo y recibir notificaciones.
 
@@ -268,13 +273,13 @@ Objetivo: validar el sistema completo.
 Pruebas de base de datos:
 
 - [x] Claves y relaciones.
-- [ ] Proveedores empresa y persona.
+- [x] Proveedores empresa y persona.
 - [x] Reservas superpuestas.
 - [x] Pagos aprobados y rechazados.
 - [x] Devoluciones.
 - [x] Reseñas duplicadas.
 - [x] Auditoría.
-- [ ] Cursor de reportes.
+- [x] Cursor de reportes.
 
 Pruebas de API:
 

@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import { getDatabasePool, sql } from '../database/sql.js';
 import { authenticateToken } from '../middlewares/auth.js';
+import { sendDevolutionCompletedEmail } from '../services/mail.js';
 
 const router = Router();
 
@@ -278,6 +279,45 @@ router.post('/:id/devolucion', authenticateToken, async (request, response, next
       .input('kilometraje_final', sql.Int, body.kilometraje_final)
       .input('combustible_final', sql.Decimal(5, 2), body.combustible_final)
       .execute('sp_RegistrarDevolucion');
+
+    const detail = await pool
+      .request()
+      .input('arriendoId', sql.Int, id)
+      .query(`
+        SELECT
+          u.email_usuario,
+          CONCAT(pe.nombres_persona, ' ', pe.apellido_paterno_persona) AS nombre_cliente,
+          CONCAT(ma.nombre_marca, ' ', mo.nombre_modelo, ' (', v.patente_vehiculo, ')') AS vehiculo,
+          sl.nombre_sede_proveedor AS sede_devolucion,
+          a.kilometraje_final_arriendo,
+          a.combustible_final_arriendo,
+          a.fecha_hora_devolucion_real_arriendo
+        FROM Arriendo a
+        INNER JOIN Reserva re ON re.ID_reserva = a.ID_reserva_arriendo
+        INNER JOIN Vehiculo v ON v.ID_vehiculo = re.ID_vehiculo_reserva
+        INNER JOIN Modelo mo ON mo.ID_modelo = v.ID_modelo_vehiculo
+        INNER JOIN Marca ma ON ma.ID_marca = mo.ID_marca_modelo
+        INNER JOIN Cliente cl ON cl.ID_usuario_cliente = re.ID_usuario_cliente_reserva
+        INNER JOIN Usuario u ON u.ID_usuario = cl.ID_usuario_cliente
+        INNER JOIN Persona pe ON pe.ID_persona = u.ID_persona_usuario
+        LEFT JOIN SedeProveedor sl ON sl.ID_sede_proveedor = a.ID_sede_devolucion_real_arriendo
+        WHERE a.ID_arriendo = @arriendoId;
+      `);
+
+    const row = detail.recordset[0];
+    if (row?.email_usuario) {
+      const fecha = row.fecha_hora_devolucion_real_arriendo?.toISOString?.() ?? '';
+      sendDevolutionCompletedEmail(
+        row.email_usuario,
+        row.nombre_cliente ?? 'cliente',
+        id,
+        row.vehiculo ?? '',
+        row.sede_devolucion ?? '',
+        Number(row.kilometraje_final_arriendo ?? 0),
+        Number(row.combustible_final_arriendo ?? 0),
+        fecha,
+      ).catch((error: unknown) => console.error('No fue posible enviar el correo de devolucion.', error));
+    }
 
     response.json({ message: 'Devolucion registrada.' });
   } catch (error) {

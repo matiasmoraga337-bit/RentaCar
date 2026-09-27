@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test:e2e:local": "node scripts/e2e-local.mjs && node scripts/e2e-flows-local.mjs",
-    "test:qa:local": "node scripts/qa-flows-local.mjs",
+    "test:qa:local": "node scripts/qa-flows-local.mjs && node scripts/qa-db.mjs",
     "seed:demo": "node scripts/seed-demo.mjs"
   },
   "dependencies": {
