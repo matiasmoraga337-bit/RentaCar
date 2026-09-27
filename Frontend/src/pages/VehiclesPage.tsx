@@ -2,18 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { EmptyState } from '../components/EmptyState';
-import { apiRequest } from '../services/api';
-
-interface Vehicle {
-  ID_vehiculo: number;
-  precio_diario_base_vehiculo: number;
-  nombre_comercial_proveedor: string;
-  nombre_marca: string;
-  nombre_modelo: string;
-  nombre_tipo_vehiculo: string;
-  nombre_comuna?: string | null;
-  nombre_region?: string | null;
-}
+import { apiRequest, assetUrl } from '../services/api';
+import type { Vehicle } from '../types/vehicle';
 
 interface VehicleResponse {
   items: Vehicle[];
@@ -130,9 +120,19 @@ export function VehiclesPage() {
         <section className="vehicle-grid" aria-label="Vehículos publicados">
           {vehicles.map((vehicle) => (
             <article className="vehicle-card" key={vehicle.ID_vehiculo}>
-              <div className="vehicle-image" aria-hidden="true">
-                <span>{vehicle.nombre_tipo_vehiculo}</span>
-                <div className="mini-car" />
+              <div className="vehicle-image">
+                {vehicle.url_foto_principal ? (
+                  <img
+                    className="vehicle-image-photo"
+                    src={assetUrl(vehicle.url_foto_principal)}
+                    alt={`${vehicle.nombre_marca} ${vehicle.nombre_modelo}`}
+                  />
+                ) : (
+                  <>
+                    <span>{vehicle.nombre_tipo_vehiculo}</span>
+                    <div className="mini-car" />
+                  </>
+                )}
               </div>
               <div className="vehicle-content">
                 <span className="vehicle-provider">{vehicle.nombre_comercial_proveedor}</span>

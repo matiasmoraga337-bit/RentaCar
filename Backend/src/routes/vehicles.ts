@@ -75,7 +75,8 @@ router.get('/', async (request, response, next) => {
           ID_sede_proveedor,
           nombre_sede_proveedor,
           nombre_comuna,
-          nombre_region
+          nombre_region,
+          url_foto_principal
         FROM vw_VehiculosPublicados
         WHERE (
           @search IS NULL
@@ -163,10 +164,25 @@ router.get('/:id', async (request, response, next) => {
         WHERE ID_proveedor_configuracion_proveedor = @providerId;
       `);
 
+    const fotosResult = await pool
+      .request()
+      .input('vehicleId', sql.Int, id)
+      .query(`
+        SELECT
+          ID_foto_vehiculo,
+          url_foto_vehiculo,
+          es_principal_foto
+        FROM VehiculoFoto
+        WHERE ID_vehiculo_vehiculo_foto = @vehicleId
+          AND activo_foto_vehiculo = 1
+        ORDER BY es_principal_foto DESC, fecha_subida_foto, ID_foto_vehiculo;
+      `);
+
     response.json({
       vehicle,
       branches: branches.recordset,
       providerConfig: providerConfig.recordset[0] ?? { permite_devolucion_otra_sede: false },
+      fotos: fotosResult.recordset,
     });
   } catch (error) {
     next(error);

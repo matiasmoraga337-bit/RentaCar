@@ -4,6 +4,7 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 
 import { env } from './config/env.js';
+import { uploadsDir } from './config/uploads.js';
 import { getDatabasePool } from './database/sql.js';
 import { HttpError } from './utils/http-error.js';
 import { mapSqlBusinessError } from './utils/sql-errors.js';
@@ -28,6 +29,7 @@ const authLimiter = rateLimit({
 
 app.use(cors({ origin: env.corsOrigin }));
 app.use(express.json());
+app.use('/uploads/vehiculos', express.static(uploadsDir, { dotfiles: 'deny', index: false, fallthrough: true }));
 
 app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/admin', adminRouter);
