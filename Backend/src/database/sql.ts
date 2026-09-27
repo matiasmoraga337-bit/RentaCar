@@ -22,7 +22,15 @@ const config: sql.config = {
 let poolPromise: Promise<sql.ConnectionPool> | undefined;
 
 export function getDatabasePool(): Promise<sql.ConnectionPool> {
-  poolPromise ??= new sql.ConnectionPool(config).connect();
+  if (!poolPromise) {
+    const candidate = new sql.ConnectionPool(config).connect();
+    candidate.catch(() => {
+      if (poolPromise === candidate) {
+        poolPromise = undefined;
+      }
+    });
+    poolPromise = candidate;
+  }
   return poolPromise;
 }
 

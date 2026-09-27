@@ -5,6 +5,8 @@ import rateLimit from 'express-rate-limit';
 
 import { env } from './config/env.js';
 import { getDatabasePool } from './database/sql.js';
+import { HttpError } from './utils/http-error.js';
+import { mapSqlBusinessError } from './utils/sql-errors.js';
 import authRouter from './routes/auth.js';
 import adminRouter from './routes/admin.js';
 import providersRouter from './routes/providers.js';
@@ -60,6 +62,18 @@ app.get('/api/health/db', async (_request, response, next) => {
 });
 
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
+  const businessError = mapSqlBusinessError(error);
+
+  if (businessError) {
+    response.status(businessError.status).json({ message: businessError.message });
+    return;
+  }
+
+  if (error instanceof HttpError) {
+    response.status(error.status).json({ message: error.message });
+    return;
+  }
+
   console.error(error);
   response.status(500).json({ message: 'Error interno del servidor.' });
 });
