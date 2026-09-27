@@ -43,6 +43,10 @@ export function VehiclesPage() {
     if (availableFrom) params.set('availableFrom', availableFrom);
     if (availableTo) params.set('availableTo', availableTo);
 
+    if (availableFrom && availableTo && availableTo <= availableFrom) {
+      return;
+    }
+
     apiRequest<VehicleResponse>(`/vehiculos?${params.toString()}`, {
       signal: controller.signal,
     })
@@ -97,11 +101,11 @@ export function VehiclesPage() {
         </label>
         <label>
           Disponible desde
-          <input type="date" value={availableFrom} onChange={(event) => setAvailableFrom(event.target.value)} />
+          <input type="date" min={new Date().toISOString().split('T')[0]} value={availableFrom} onChange={(event) => setAvailableFrom(event.target.value)} />
         </label>
         <label>
           Disponible hasta
-          <input type="date" value={availableTo} onChange={(event) => setAvailableTo(event.target.value)} />
+          <input type="date" min={availableFrom || new Date().toISOString().split('T')[0]} value={availableTo} onChange={(event) => setAvailableTo(event.target.value)} />
         </label>
         <div className="filter-actions">
           <button type="button" className="button button-outline button-small" onClick={clearFilters}>Limpiar filtros</button>
@@ -109,7 +113,11 @@ export function VehiclesPage() {
       </section>
 
       {loading && <p className="catalog-message">Buscando vehículos...</p>}
-      {error && <p className="form-error catalog-message" role="alert">{error}</p>}
+      {availableFrom && availableTo && availableTo <= availableFrom ? (
+        <p className="form-error" role="alert">La fecha de devolución debe ser posterior a la de retiro.</p>
+      ) : (
+        <>{error && <p className="form-error catalog-message" role="alert">{error}</p>}</>
+      )}
       {!loading && !error && vehicles.length === 0 && (
         <EmptyState
           title={hasActiveFilters ? 'Sin resultados' : 'Aún no hay vehículos publicados'}
