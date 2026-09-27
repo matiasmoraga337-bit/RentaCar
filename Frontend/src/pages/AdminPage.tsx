@@ -67,6 +67,20 @@ interface AdminReservation {
   monto_pago: number | null;
 }
 
+interface AdminReview {
+  ID_resena: number;
+  calificacion_resena: number;
+  comentario_resena: string | null;
+  fecha_resena: string;
+  activo_resena: boolean;
+  ID_vehiculo: number;
+  patente_vehiculo: string;
+  nombre_modelo: string;
+  nombre_marca: string;
+  nombre_comercial_proveedor: string;
+  nombre_cliente: string;
+}
+
 interface ProviderReport {
   ID_proveedor: number;
   nombre_proveedor: string;
@@ -150,6 +164,10 @@ export function AdminPage() {
   const [usersPage, setUsersPage] = useState(1);
   const [usersTotal, setUsersTotal] = useState(0);
   const [usersTotalPages, setUsersTotalPages] = useState(1);
+  const [reviews, setReviews] = useState<AdminReview[]>([]);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsTotal, setReviewsTotal] = useState(0);
+  const [reviewsTotalPages, setReviewsTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyId, setBusyId] = useState('');
@@ -199,6 +217,18 @@ export function AdminPage() {
     }
   };
 
+  const loadReviews = async (page: number) => {
+    try {
+      const result = await apiRequest<PageResult<AdminReview>>(`/admin/resenas?page=${page}&pageSize=10`);
+      setReviews(result.items);
+      setReviewsTotal(result.total);
+      setReviewsTotalPages(result.totalPages);
+      setReviewsPage(result.page);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible cargar las reseñas.');
+    }
+  };
+
   useEffect(() => {
     let active = true;
 
@@ -229,6 +259,7 @@ export function AdminPage() {
 
     void loadUsers(1);
     void loadAudit(1);
+    void loadReviews(1);
 
     return () => {
       active = false;
@@ -303,6 +334,22 @@ export function AdminPage() {
       await loadUsers(usersPage);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'No fue posible actualizar los roles.');
+    } finally {
+      setBusyId('');
+    }
+  }
+
+  async function updateReviewVisibility(reviewId: number, visible: boolean) {
+    setBusyId(`res-${reviewId}`);
+    setError('');
+    try {
+      await apiRequest(`/admin/resenas/${reviewId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ visible }),
+      });
+      await loadReviews(reviewsPage);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'No fue posible moderar la reseña.');
     } finally {
       setBusyId('');
     }
@@ -562,6 +609,49 @@ export function AdminPage() {
           </div>
         )}
         <PaginationControls page={auditPage} totalPages={auditTotalPages} onChange={(page) => { void loadAudit(page); }} />
+      </section>
+
+      <section className="admin-section">
+        <SectionHeading eyebrow="RESEÑAS" title="Modera el contenido mostrado"><span className="catalog-count">{reviewsTotal}</span></SectionHeading>
+        {reviews.length === 0 ? (
+          <div className="empty-state compact-empty"><span>✦</span><p>Sin reseñas registradas todavía.</p></div>
+        ) : (
+          <div className="table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Vehículo</th>
+                  <th>Proveedor</th>
+                  <th>Calificación</th>
+                  <th>Comentario</th>
+                  <th>Fecha</th>
+                  <th>Estado</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reviews.map((review) => (
+                  <tr key={review.ID_resena}>
+                    <td><strong>{review.nombre_cliente}</strong></td>
+                    <td>{review.nombre_marca} {review.nombre_modelo}<span className="table-sub">{review.patente_vehiculo}</span></td>
+                    <td>{review.nombre_comercial_proveedor}</td>
+                    <td>{"★".repeat(review.calificacion_resena)}{"☆".repeat(5 - review.calificacion_resena)}</td>
+                    <td>{review.comentario_resena ?? '—'}</td>
+                    <td>{formatDate(review.fecha_resena)}</td>
+                    <td><StatusBadge status={review.activo_resena ? 'APROBADA' : 'OCULTA'} variant="pill" /></td>
+                    <td>
+                      <button className="button button-outline button-small" disabled={busyId === `res-${review.ID_resena}`} onClick={() => updateReviewVisibility(review.ID_resena, !review.activo_resena)}>
+                        {review.activo_resena ? 'Ocultar' : 'Mostrar'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <PaginationControls page={reviewsPage} totalPages={reviewsTotalPages} onChange={(page) => { void loadReviews(page); }} />
       </section>
     </main>
   );

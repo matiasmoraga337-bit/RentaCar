@@ -41,6 +41,9 @@ export function ProfilePage() {
   const [submitting, setSubmitting] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
+  const [pwMessage, setPwMessage] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwSubmitting, setPwSubmitting] = useState(false);
 
   function loadReservations() {
     apiRequest<MyReservation[]>('/reservas/mis-reservas')
@@ -102,6 +105,39 @@ export function ProfilePage() {
     }
   }
 
+  async function handlePasswordChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    setPwMessage('');
+    setPwError('');
+    setPageError('');
+
+    if (values.nuevaPassword !== values.confirmacion) {
+      setPwError('La confirmación no coincide con la nueva contraseña.');
+      return;
+    }
+
+    setPwSubmitting(true);
+    try {
+      await apiRequest('/auth/cambiar-contrasena', {
+        method: 'POST',
+        body: JSON.stringify({
+          actualPassword: values.actualPassword,
+          nuevaPassword: values.nuevaPassword,
+        }),
+      });
+      setPwMessage('Contraseña actualizada. Vuelve a iniciar sesión.');
+      window.setTimeout(() => {
+        logout();
+        navigate('/login');
+      }, 1200);
+    } catch (error) {
+      setPwError(error instanceof Error ? error.message : 'No fue posible cambiar la contraseña.');
+    } finally {
+      setPwSubmitting(false);
+    }
+  }
+
   const canCancel = (reservation: MyReservation) =>
     reservation.nombre_estado_reserva === 'PENDIENTE' || reservation.nombre_estado_reserva === 'CONFIRMADA';
 
@@ -149,6 +185,18 @@ export function ProfilePage() {
             <button className="button button-primary" type="submit">Guardar cambios</button>
           </form>
         )}
+      </section>
+
+      <section className="profile-edit-section">
+        <SectionHeading eyebrow="SEGURIDAD" title="Cambia tu contraseña" />
+        {pwMessage && <Message tone="success">{pwMessage}</Message>}
+        {pwError && <Message tone="error">{pwError}</Message>}
+        <form className="profile-edit-form" onSubmit={handlePasswordChange}>
+          <label>Contraseña actual<input name="actualPassword" type="password" autoComplete="current-password" required /></label>
+          <label>Nueva contraseña<input name="nuevaPassword" type="password" minLength={8} autoComplete="new-password" placeholder="Mínimo 8 caracteres" required /></label>
+          <label>Confirmar nueva contraseña<input name="confirmacion" type="password" minLength={8} autoComplete="new-password" required /></label>
+          <button className="button button-primary" disabled={pwSubmitting}>{pwSubmitting ? 'Guardando...' : 'Actualizar contraseña'}</button>
+        </form>
       </section>
 
       <section className="reservations-section">
