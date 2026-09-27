@@ -45,6 +45,19 @@ const businessErrors: Record<number, BusinessErrorMapping> = {
   55003: { status: 409, message: 'La reserva no puede ser cancelada.' },
 };
 
+const constraintErrors: Record<number, HttpError> = {
+  2601: new HttpError(409, 'Ya existe un registro con los mismos datos.'),
+  2627: new HttpError(409, 'Ya existe un registro con los mismos datos.'),
+  547: new HttpError(409, 'La operacion viola una restriccion de integridad referencial.'),
+  515: new HttpError(400, 'Falta un valor obligatorio.'),
+  8152: new HttpError(400, 'Algun dato supera el largo maximo permitido.'),
+  2628: new HttpError(400, 'Algun dato supera el largo maximo permitido.'),
+  241: new HttpError(400, 'Dato de tipo o formato invalido.'),
+  245: new HttpError(400, 'Dato de tipo o formato invalido.'),
+  22003: new HttpError(400, 'Valor numerico fuera de rango.'),
+  8115: new HttpError(400, 'Valor numerico fuera de rango.'),
+};
+
 export interface SqlBusinessError {
   number: number;
   message?: string;
@@ -58,5 +71,7 @@ export function getSqlErrorNumber(error: unknown): number | null {
 export function mapSqlBusinessError(error: unknown): HttpError | null {
   const number = getSqlErrorNumber(error);
   const mapping = number !== null ? businessErrors[number] : undefined;
-  return mapping ? new HttpError(mapping.status, mapping.message) : null;
+  if (mapping) return new HttpError(mapping.status, mapping.message);
+  const constraint = number !== null ? constraintErrors[number] : undefined;
+  return constraint ?? null;
 }

@@ -63,7 +63,17 @@ app.get('/api/health/db', async (_request, response, next) => {
   }
 });
 
+app.use((_request: express.Request, response: express.Response) => {
+  response.status(404).json({ message: 'Ruta no encontrada.' });
+});
+
 app.use((error: unknown, _request: express.Request, response: express.Response, _next: express.NextFunction) => {
+  const bodyParseError = error as { type?: string } | null;
+  if (bodyParseError?.type === 'entity.parse.failed') {
+    response.status(400).json({ message: 'JSON invalido.' });
+    return;
+  }
+
   const businessError = mapSqlBusinessError(error);
 
   if (businessError) {

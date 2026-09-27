@@ -244,25 +244,28 @@ router.patch('/:id/publicacion', authenticateToken, async (request, response, ne
   const state = typeof request.body?.estado === 'string'
     ? request.body.estado.toUpperCase()
     : '';
+  const allowed = ['PENDIENTE', 'PUBLICADO', 'RECHAZADO', 'SUSPENDIDO'];
 
-  if (!Number.isInteger(id) || id <= 0 || !state) {
-    response.status(400).json({ message: 'Vehiculo y estado son obligatorios.' });
+  if (!Number.isInteger(id) || id <= 0 || !allowed.includes(state)) {
+    response.status(400).json({ message: 'Vehiculo o estado invalido.' });
     return;
   }
 
   try {
     const pool = await getDatabasePool();
-    const result = await pool
+    const access = await pool
       .request()
       .input('vehicleId', sql.Int, id)
       .input('userId', sql.Int, request.user!.id)
-      .input('state', sql.VarChar(50), state)
       .query(`
-        UPDATE v
-        SET ID_estado_publicacion_vehiculo_vehiculo = ep.ID_estado_publicacion_vehiculo
+        SELECT
+          v.ID_vehiculo,
+          CASE
+            WHEN pu.ID_usuario_proveedor_usuario IS NOT NULL THEN 1
+            WHEN ur.ID_rol_usuario_rol IS NOT NULL AND r.nombre_rol = 'ADMIN' THEN 1
+            ELSE 0
+          END AS canManage
         FROM Vehiculo v
-        INNER JOIN EstadoPublicacionVehiculo ep
-          ON ep.nombre_estado_publicacion_vehiculo = @state
         LEFT JOIN ProveedorUsuario pu
           ON pu.ID_proveedor_proveedor_usuario = v.ID_proveedor_vehiculo
          AND pu.ID_usuario_proveedor_usuario = @userId
@@ -270,14 +273,45 @@ router.patch('/:id/publicacion', authenticateToken, async (request, response, ne
           ON ur.ID_usuario_usuario_rol = @userId
         LEFT JOIN Rol r
           ON r.ID_rol = ur.ID_rol_usuario_rol
-        WHERE v.ID_vehiculo = @vehicleId
-          AND (pu.ID_usuario_proveedor_usuario IS NOT NULL OR r.nombre_rol = 'ADMIN');
+        WHERE v.ID_vehiculo = @vehicleId;
+      `);
+    const vehicle = access.recordset[0];
+
+    if (!vehicle) {
+      response.status(404).json({ message: 'Vehiculo no encontrado.' });
+      return;
+    }
+    if (vehicle.canManage !== 1) {
+      response.status(403).json({ message: 'Sin permisos para modificar este vehiculo.' });
+      return;
+    }
+
+    if (state === 'PUBLICADO') {
+      await pool
+        .request()
+        .input('ID_vehiculo', sql.Int, id)
+        .execute('sp_PublicarVehiculo');
+      response.json({ message: 'Vehiculo publicado.' });
+      return;
+    }
+
+    const result = await pool
+      .request()
+      .input('vehicleId', sql.Int, id)
+      .input('state', sql.VarChar(50), state)
+      .query(`
+        UPDATE v
+        SET ID_estado_publicacion_vehiculo_vehiculo = ep.ID_estado_publicacion_vehiculo
+        FROM Vehiculo v
+        INNER JOIN EstadoPublicacionVehiculo ep
+          ON ep.nombre_estado_publicacion_vehiculo = @state
+        WHERE v.ID_vehiculo = @vehicleId;
 
         SELECT @@ROWCOUNT AS affected;
       `);
 
     if (result.recordset[0].affected === 0) {
-      response.status(404).json({ message: 'Vehiculo, estado o permiso no valido.' });
+      response.status(404).json({ message: 'Vehiculo no encontrado.' });
       return;
     }
 
