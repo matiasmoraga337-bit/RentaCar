@@ -21,7 +21,7 @@ const app = express();
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 20,
+  limit: 60,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
   message: { message: 'Demasiados intentos. Espera unos minutos antes de volver a intentarlo.' },

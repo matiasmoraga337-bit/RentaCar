@@ -115,7 +115,7 @@ Tareas:
 - [x] Implementar transacciones.
 - [x] Validar reservas superpuestas.
 - [x] Validar sedes y proveedores.
-- [ ] Probar estados de reserva, pago y arriendo.
+- [x] Probar estados de reserva, pago y arriendo.
 
 Resultado esperado: lógica principal implementada en SQL Server.
 
@@ -130,9 +130,9 @@ Tareas:
 - [x] Configurar `mssql`.
 - [x] Crear pool de conexión.
 - [x] Crear manejo de errores.
-- [ ] Crear validadores.
+- [x] Crear validadores.
 - [x] Crear middleware JWT.
-- [ ] Crear middleware de roles.
+- [x] Crear middleware de roles.
 
 Resultado esperado: backend conectado a SQL Server.
 
@@ -148,7 +148,7 @@ Tareas:
 - [x] Generación de JWT.
 - [x] Consulta de perfil.
 - [x] Protección de rutas.
-- [ ] Control de roles.
+- [x] Control de roles.
 
 Resultado esperado: usuarios pueden registrarse e iniciar sesión de forma segura.
 
@@ -158,15 +158,15 @@ Objetivo: permitir que los proveedores publiquen su oferta.
 
 Tareas:
 
-- [ ] Registrar proveedores.
-- [ ] Aprobar proveedores.
-- [ ] Asociar usuarios.
-- [ ] Crear sedes.
-- [ ] Registrar vehículos.
-- [ ] Configurar sedes habilitadas.
+- [x] Registrar proveedores.
+- [x] Aprobar proveedores.
+- [x] Asociar usuarios.
+- [x] Crear sedes.
+- [x] Registrar vehículos.
+- [x] Configurar sedes habilitadas.
 - [ ] Configurar comunas de operación.
-- [ ] Publicar vehículos.
-- [ ] Registrar movimientos.
+- [x] Publicar vehículos.
+- [x] Registrar movimientos.
 
 Resultado esperado: un proveedor aprobado puede publicar vehículos.
 
@@ -177,12 +177,12 @@ Objetivo: permitir que los clientes encuentren vehículos.
 Tareas:
 
 - [x] Crear catálogo público.
-- [ ] Filtrar por región y comuna.
-- [ ] Filtrar por tipo, marca y modelo.
+- [x] Filtrar por región y comuna.
+- [x] Filtrar por tipo, marca y modelo.
 - [x] Filtrar por precio.
-- [ ] Filtrar por fechas.
-- [ ] Mostrar detalle del vehículo.
-- [ ] Mostrar sedes disponibles.
+- [x] Filtrar por fechas.
+- [x] Mostrar detalle del vehículo.
+- [x] Mostrar sedes disponibles.
 
 Resultado esperado: un cliente puede encontrar un vehículo disponible.
 
@@ -192,16 +192,16 @@ Objetivo: completar el flujo de reserva.
 
 Tareas:
 
-- [ ] Seleccionar fechas.
-- [ ] Seleccionar sede de retiro.
-- [ ] Seleccionar sede de devolución.
-- [ ] Validar superposición.
-- [ ] Crear reserva pendiente.
-- [ ] Registrar pago simulado.
-- [ ] Aprobar o rechazar pago.
-- [ ] Confirmar la reserva.
-- [ ] Cancelar reserva.
-- [ ] Consultar historial.
+- [x] Seleccionar fechas.
+- [x] Seleccionar sede de retiro.
+- [x] Seleccionar sede de devolución.
+- [x] Validar superposición.
+- [x] Crear reserva pendiente.
+- [x] Registrar pago simulado.
+- [x] Aprobar o rechazar pago.
+- [x] Confirmar la reserva.
+- [x] Cancelar reserva.
+- [x] Consultar historial.
 
 Resultado esperado: un cliente puede reservar un vehículo y confirmar el pago.
 
@@ -211,16 +211,16 @@ Objetivo: registrar la operación real.
 
 Tareas:
 
-- [ ] Registrar retiro.
-- [ ] Guardar kilometraje inicial.
-- [ ] Guardar combustible inicial.
-- [ ] Cambiar vehículo a arrendado.
-- [ ] Registrar devolución.
-- [ ] Guardar kilometraje final.
-- [ ] Guardar combustible final.
-- [ ] Cambiar arriendo a finalizado.
-- [ ] Cambiar reserva a completada.
-- [ ] Liberar vehículo.
+- [x] Registrar retiro.
+- [x] Guardar kilometraje inicial.
+- [x] Guardar combustible inicial.
+- [x] Cambiar vehículo a arrendado.
+- [x] Registrar devolución.
+- [x] Guardar kilometraje final.
+- [x] Guardar combustible final.
+- [x] Cambiar arriendo a finalizado.
+- [x] Cambiar reserva a completada.
+- [x] Liberar vehículo.
 
 Resultado esperado: se puede completar el ciclo completo del arriendo.
 
@@ -230,12 +230,12 @@ Objetivo: cerrar la experiencia del cliente.
 
 Tareas:
 
-- [ ] Crear reseñas de arriendos completados.
-- [ ] Validar calificación entre 1 y 5.
-- [ ] Moderar reseñas.
-- [ ] Configurar SMTP.
-- [ ] Enviar confirmación de reserva.
-- [ ] Enviar confirmación de pago.
+- [x] Crear reseñas de arriendos completados.
+- [x] Validar calificación entre 1 y 5.
+- [x] Moderar reseñas.
+- [x] Configurar SMTP.
+- [x] Enviar confirmación de reserva.
+- [x] Enviar confirmación de pago.
 - [ ] Enviar notificación de devolución.
 
 Resultado esperado: el cliente puede calificar un arriendo y recibir notificaciones.
@@ -246,17 +246,17 @@ Objetivo: construir las interfaces del sistema.
 
 Tareas:
 
-- [ ] Crear layout público.
-- [ ] Crear navegación.
-- [ ] Crear registro y login.
-- [ ] Crear catálogo.
-- [ ] Crear detalle de vehículo.
-- [ ] Crear formulario de reserva.
-- [ ] Crear pago simulado.
-- [ ] Crear historial.
-- [ ] Crear panel del proveedor.
-- [ ] Crear panel administrativo.
-- [ ] Crear reportes.
+- [x] Crear layout público.
+- [x] Crear navegación.
+- [x] Crear registro y login.
+- [x] Crear catálogo.
+- [x] Crear detalle de vehículo.
+- [x] Crear formulario de reserva.
+- [x] Crear pago simulado.
+- [x] Crear historial.
+- [x] Crear panel del proveedor.
+- [x] Crear panel administrativo.
+- [x] Crear reportes.
 - [ ] Adaptar diseño a dispositivos móviles.
 
 Resultado esperado: los flujos principales funcionan desde el navegador.
@@ -267,23 +267,23 @@ Objetivo: validar el sistema completo.
 
 Pruebas de base de datos:
 
-- [ ] Claves y relaciones.
+- [x] Claves y relaciones.
 - [ ] Proveedores empresa y persona.
-- [ ] Reservas superpuestas.
-- [ ] Pagos aprobados y rechazados.
-- [ ] Devoluciones.
-- [ ] Reseñas duplicadas.
-- [ ] Auditoría.
+- [x] Reservas superpuestas.
+- [x] Pagos aprobados y rechazados.
+- [x] Devoluciones.
+- [x] Reseñas duplicadas.
+- [x] Auditoría.
 - [ ] Cursor de reportes.
 
 Pruebas de API:
 
-- [ ] Autenticación.
-- [ ] Roles.
-- [ ] Validación de datos.
-- [ ] Permisos por proveedor.
-- [ ] Permisos por cliente.
-- [ ] Errores HTTP.
+- [x] Autenticación.
+- [x] Roles.
+- [x] Validación de datos.
+- [x] Permisos por proveedor.
+- [x] Permisos por cliente.
+- [x] Errores HTTP.
 
 Pruebas frontend:
 
@@ -345,18 +345,18 @@ Resultado esperado: proyecto documentado y listo para presentar.
 
 El proyecto se considerará funcional cuando:
 
-- [ ] Un usuario pueda registrarse e iniciar sesión.
-- [ ] Un administrador pueda aprobar un proveedor.
-- [ ] Un proveedor aprobado pueda registrar y publicar un vehículo.
-- [ ] Un cliente pueda buscar vehículos.
-- [ ] El sistema impida reservas superpuestas.
-- [ ] Un cliente pueda crear una reserva.
-- [ ] Un pago aprobado confirme la reserva.
-- [ ] Se pueda iniciar y finalizar un arriendo.
-- [ ] Se pueda crear una reseña válida.
-- [ ] La auditoría registre cambios importantes.
-- [ ] El reporte muestre información correcta.
-- [ ] Frontend y backend se comuniquen mediante la API.
+- [x] Un usuario pueda registrarse e iniciar sesión.
+- [x] Un administrador pueda aprobar un proveedor.
+- [x] Un proveedor aprobado pueda registrar y publicar un vehículo.
+- [x] Un cliente pueda buscar vehículos.
+- [x] El sistema impida reservas superpuestas.
+- [x] Un cliente pueda crear una reserva.
+- [x] Un pago aprobado confirme la reserva.
+- [x] Se pueda iniciar y finalizar un arriendo.
+- [x] Se pueda crear una reseña válida.
+- [x] La auditoría registre cambios importantes.
+- [x] El reporte muestre información correcta.
+- [x] Frontend y backend se comuniquen mediante la API.
 - [ ] SQL Server funcione mediante Docker.
 - [ ] El proyecto pueda clonarse y ejecutarse desde GitHub siguiendo el README.
 
