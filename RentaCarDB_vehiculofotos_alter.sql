@@ -78,5 +78,6 @@ LEFT JOIN Region r
 WHERE p.ID_estado_proveedor_proveedor =
       (SELECT ID_estado_proveedor FROM EstadoProveedor
        WHERE nombre_estado_proveedor = 'APROBADO')
-  AND ep.nombre_estado_publicacion_vehiculo = 'PUBLICADO';
+  AND ep.nombre_estado_publicacion_vehiculo = 'PUBLICADO'
+  AND ev.nombre_estado_vehiculo = 'DISPONIBLE';
 GO

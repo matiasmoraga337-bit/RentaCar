@@ -297,6 +297,20 @@ POST /api/arriendos/:id/resena
 PUT  /api/resenas/:id/moderacion
 ```
 
+### Propuesta pendiente: Estados de resena
+
+La moderación de reseñas funciona hoy con el bit `Resena.activo_resena`
+(`PATCH /admin/resenas/:id` con `{ visible }`). Como evolución de producto se
+propone reemplazar dicho bit por un modelo de estados explícito:
+
+- Tabla `EstadoResena` con `PENDIENTE`, `APROBADA` y `RECHAZADA`.
+- Columna `Resena.ID_estado_resena_resena` con backfill de las filas actuales
+  (`activo_resena = 1` => `APROBADA`, `activo_resena = 0` => `RECHAZADA`).
+- Visibilidad publica derivada de `APROBADA`, y el canal de moderación usa el
+  estado en lugar del bit.
+- Si se quiere un flujo de revision real, las nuevas resenas nacerian como
+  `PENDIENTE` y solo las `APROBADA` se mostrarian (decisión de producto).
+
 ## 10. Seguridad
 
 - Contraseñas almacenadas con `bcrypt`.
